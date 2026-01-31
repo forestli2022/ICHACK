@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Reading Prescriptions – Hackathon Prototype</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <style>
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      margin: 0;
+      padding: 0;
+      background: #f7f7f7;
+      color: #222;
+      line-height: 1.5;
+    }
+
+    header {
+      background: #1f2933;
+      color: white;
+      padding: 2rem;
+    }
+
+    section {
+      padding: 2rem;
+      max-width: 900px;
+      margin: auto;
+    }
+
+    h1, h2 {
+      margin-top: 0;
+    }
+
+    .problem, .impact, .feasibility {
+      background: white;
+      border-radius: 8px;
+      margin-bottom: 2rem;
+      padding: 1.5rem;
+    }
+
+    .form-group {
+      margin-bottom: 1rem;
+    }
+
+    label {
+      font-weight: 600;
+      display: block;
+      margin-bottom: 0.25rem;
+    }
+
+    select, button {
+      width: 100%;
+      padding: 0.5rem;
+      font-size: 1rem;
+    }
+
+    button {
+      background: #2563eb;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background: #1d4ed8;
+    }
+
+    .results {
+      margin-top: 2rem;
+      background: #eef2ff;
+      padding: 1.5rem;
+      border-radius: 8px;
+    }
+
+    .book {
+      margin-bottom: 1.5rem;
+    }
+
+    footer {
+      text-align: center;
+      padding: 2rem;
+      font-size: 0.9rem;
+      color: #555;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>Reading Prescriptions</h1>
+  <p>
+    Helping educators choose the right book at the right moment
+    for vulnerable and underrepresented youth.
+  </p>
+</header>
+
+<section class="problem">
+  <h2>Problem Definition</h2>
+  <p>
+    Charities and educators know that reading can support confidence,
+    identity, and learning. However, book selection is often based only
+    on age or reading level.
+  </p>
+  <p>
+    This leads to disengagement, wasted time, and missed opportunities—
+    especially for children facing language barriers, low confidence,
+    or difficult life circumstances.
+  </p>
+</section>
+
+<section class="impact">
+  <h2>Our Solution</h2>
+  <p>
+    This tool acts as a <strong>decision-support system</strong> for educators
+    and youth workers. Instead of generic recommendations, it generates
+    <strong>needs-based reading prescriptions</strong>.
+  </p>
+
+  <form>
+    <div class="form-group">
+      <label>Age Range</label>
+      <select>
+        <option>8–10</option>
+        <option>10–12</option>
+        <option>12–14</option>
+      </select>
+    </div>
+
+    <div class="form-group">
+      <label>Reading Level</label>
+      <select>
+        <option>Below average</option>
+        <option>Average</option>
+        <option>Above average</option>
+      </select>
+    </div>
+
+    <div class="form-group">
+      <label>Current Need</label>
+      <select>
+        <option>Confidence & self-esteem</option>
+        <option>Language development</option>
+        <option>Sense of belonging / identity</option>
+        <option>Motivation to read</option>
+      </select>
+    </div>
+
+    <button type="button">Generate Reading Prescription</button>
+  </form>
+
+  <div class="results">
+    <h3>Recommended Books</h3>
+
+    <div class="book">
+      <strong>Book A</strong>
+      <p>
+        Chosen to support confidence through relatable characters and
+        short chapters that reduce cognitive load.
+      </p>
+      <em>Use: Read-aloud followed by guided discussion.</em>
+    </div>
+
+    <div class="book">
+      <strong>Book B</strong>
+      <p>
+        Reinforces language skills while addressing themes of belonging
+        without sensitive or triggering content.
+      </p>
+      <em>Use: Independent reading with weekly check-ins.</em>
+    </div>
+  </div>
+</section>
+
+<section class="feasibility">
+  <h2>Why This Is Feasible & Scalable</h2>
+  <ul>
+    <li>Built as a lightweight web app — no accounts or complex onboarding</li>
+    <li>Uses a small, curated book dataset suitable for charity contexts</li>
+    <li>AI logic is explainable and constraint-based, not a black box</li>
+    <li>Can be adapted across charities, age groups, and languages</li>
+  </ul>
+</section>
+
+<section class="impact">
+  <h2>Impact & Storytelling</h2>
+  <p>
+    <strong>Before:</strong> An educator guesses which book might work,
+    hoping it resonates.
+  </p>
+  <p>
+    <strong>After:</strong> The educator selects a book with a clear purpose,
+    aligned to the child’s current needs, and knows what outcome to look for.
+  </p>
+  <p>
+    This improves engagement, reduces dropout, and helps charities
+    deliver measurable educational and emotional impact.
+  </p>
+</section>
+
+<footer>
+  Hackathon Prototype · Built for charitable impact
+</footer>
+
+</body>
+</html>
