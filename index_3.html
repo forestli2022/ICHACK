@@ -4,156 +4,173 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Teacher Dashboard</title>
+
   <!-- Tailwind CDN -->
+  <script>
+    tailwind.config = { darkMode: 'class' }
+  </script>
   <script src="https://cdn.tailwindcss.com"></script>
+
   <!-- React CDN -->
   <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 </head>
 <body class="min-h-screen">
-  <div id="root"></div>
+<div id="root"></div>
 
-  <script type="text/babel">
-    const { useState, useEffect } = React;
+<script type="text/babel">
+const { useState } = React;
 
-    const students = [
-      { id: 1, name: "Alice Johnson", progress: 0.78, accuracy: 0.82, commonMistakes: ["th","sh","r"], wordsPracticed: 120 },
-      { id: 2, name: "Ben Carter", progress: 0.56, accuracy: 0.65, commonMistakes: ["s","ch","l"], wordsPracticed: 95 },
-      { id: 3, name: "Clara Smith", progress: 0.91, accuracy: 0.88, commonMistakes: ["r","l","ed"], wordsPracticed: 150 },
-      { id: 4, name: "Daniel Wu", progress: 0.67, accuracy: 0.73, commonMistakes: ["a","i","o"], wordsPracticed: 110 },
-      { id: 5, name: "Eva Patel", progress: 0.82, accuracy: 0.90, commonMistakes: ["th","s"], wordsPracticed: 140 },
-      { id: 6, name: "Frank Lopez", progress: 0.49, accuracy: 0.58, commonMistakes: ["ch","r"], wordsPracticed: 80 },
-    ];
+const students = [
+  { id: 1, name: "Alice Johnson", progress: 0.78, accuracy: 0.82, commonMistakes: ["th","sh","r"], wordsPracticed: 120 },
+  { id: 2, name: "Ben Carter", progress: 0.56, accuracy: 0.65, commonMistakes: ["s","ch","l"], wordsPracticed: 95 },
+  { id: 3, name: "Clara Smith", progress: 0.91, accuracy: 0.88, commonMistakes: ["r","l","ed"], wordsPracticed: 150 },
+  { id: 4, name: "Daniel Wu", progress: 0.67, accuracy: 0.73, commonMistakes: ["a","i","o"], wordsPracticed: 110 },
+  { id: 5, name: "Eva Patel", progress: 0.82, accuracy: 0.90, commonMistakes: ["th","s"], wordsPracticed: 140 },
+  { id: 6, name: "Frank Lopez", progress: 0.49, accuracy: 0.58, commonMistakes: ["ch","r"], wordsPracticed: 80 },
+];
 
-    function App() {
-      const [loggedIn, setLoggedIn] = useState(false);
-      const [darkMode, setDarkMode] = useState(false);
-      const [selectedStudent, setSelectedStudent] = useState(students[0]);
-      const [fontSize, setFontSize] = useState("16px");
+function App() {
+  const [loggedIn, setLoggedIn] = useState(false);
+  const [darkMode, setDarkMode] = useState(false);
+  const [selectedStudent, setSelectedStudent] = useState(students[0]);
+  const [fontSize, setFontSize] = useState("16px");
+  const [colorblindMode, setColorblindMode] = useState("normal");
 
-      // Apply dark mode class to html
-      useEffect(() => {
-        document.documentElement.classList.toggle("dark", darkMode);
-      }, [darkMode]);
+  const toggleDarkMode = () => {
+    setDarkMode(!darkMode);
+    document.documentElement.classList.toggle("dark");
+  };
 
-      if (!loggedIn) {
-        // Mock login page
-        return (
-          <div className="min-h-screen flex flex-col justify-center items-center bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white p-4">
-            <h1 className="text-3xl font-bold mb-6">Teacher Login</h1>
-            <div className="flex flex-col gap-4 w-full max-w-xs">
-              <button
-                onClick={() => setLoggedIn(true)}
-                className="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded flex items-center justify-center"
-              >
-                <img src="https://upload.wikimedia.org/wikipedia/commons/5/53/Google_%22G%22_Logo.svg" alt="Google Logo" className="w-5 h-5 mr-2" />
-                Sign in with Google
-              </button>
-              <button
-                onClick={() => setLoggedIn(true)}
-                className="bg-gray-800 hover:bg-gray-900 text-white font-medium py-2 px-4 rounded flex items-center justify-center"
-              >
-                <img src="https://upload.wikimedia.org/wikipedia/commons/4/44/Microsoft_logo.svg" alt="Microsoft Logo" className="w-5 h-5 mr-2" />
-                Sign in with Microsoft
-              </button>
-            </div>
-          </div>
-        );
-      }
+  const getStudentButtonClasses = (student) => {
+    let base = "w-full text-left p-2 rounded mb-1 focus:outline focus:outline-2 focus:outline-blue-500";
+    let selected = student.id === selectedStudent.id;
+    // Colors adjusted for accessibility
+    let colorClasses = {
+      normal: selected ? "bg-blue-200 dark:bg-blue-700 font-semibold" : "hover:bg-gray-200 dark:hover:bg-gray-700",
+      protanopia: selected ? "bg-yellow-300 dark:bg-yellow-600 font-semibold" : "hover:bg-yellow-200 dark:hover:bg-yellow-500",
+      deuteranopia: selected ? "bg-orange-300 dark:bg-orange-600 font-semibold" : "hover:bg-orange-200 dark:hover:bg-orange-500",
+      tritanopia: selected ? "bg-purple-300 dark:bg-purple-600 font-semibold" : "hover:bg-purple-200 dark:hover:bg-purple-500"
+    };
+    return base + " " + colorClasses[colorblindMode];
+  };
 
-      // Teacher Dashboard
-      return (
-        <div style={{ fontSize }} className={`min-h-screen`}>
-          {/* Header */}
-          <header className="flex justify-between items-center p-4 shadow-md rounded bg-white dark:bg-gray-900 text-gray-900 dark:text-white">
-            <h1 className="text-2xl font-medium">Teacher Dashboard</h1>
-            <div className="flex items-center gap-4">
-              <label htmlFor="dark-mode-toggle" className="sr-only">Toggle dark mode</label>
-              <input
-                id="dark-mode-toggle"
-                type="checkbox"
-                checked={darkMode}
-                onChange={() => setDarkMode(!darkMode)}
-                className="h-5 w-5 cursor-pointer"
-              />
-              <span>Dark Mode</span>
-            </div>
-          </header>
-
-          <main className="flex flex-col md:flex-row p-6 gap-6">
-            {/* Student List */}
-            <aside className="w-full md:w-64 border border-gray-300 dark:border-gray-700 p-2 rounded bg-gray-100 dark:bg-gray-800">
-              <h2 className="text-lg font-semibold mb-2">Students</h2>
-              <ul>
-                {students.map(s => (
-                  <li key={s.id}>
-                    <button
-                      onClick={() => setSelectedStudent(s)}
-                      className={`w-full text-left p-2 rounded mb-1 ${
-                        selectedStudent.id===s.id ? "bg-blue-200 dark:bg-blue-700 font-semibold" : "hover:bg-gray-200 dark:hover:bg-gray-700"
-                      } focus:outline focus:outline-2 focus:outline-blue-500`}
-                    >
-                      {s.name}
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </aside>
-
-            {/* Student Details */}
-            <section className="flex-1 p-4 rounded shadow-md bg-white dark:bg-gray-900 text-gray-900 dark:text-white">
-              <h2 className="text-xl font-semibold mb-4">{selectedStudent.name}</h2>
-
-              <div className="mb-4">
-                <label className="block font-medium mb-1">Progress</label>
-                <progress value={selectedStudent.progress} max="1" className="w-full h-4 rounded"></progress>
-                <span className="text-sm ml-1">{Math.round(selectedStudent.progress*100)}%</span>
-              </div>
-
-              <div className="mb-4">
-                <label className="block font-medium mb-1">Accuracy</label>
-                <progress value={selectedStudent.accuracy} max="1" className="w-full h-4 rounded"></progress>
-                <span className="text-sm ml-1">{Math.round(selectedStudent.accuracy*100)}%</span>
-              </div>
-
-              <div className="mb-4">
-                <h3 className="font-medium mb-1">Words Practiced</h3>
-                <p>{selectedStudent.wordsPracticed}</p>
-              </div>
-
-              <div className="mb-4">
-                <h3 className="font-medium mb-1">Common Mistakes</h3>
-                <ul className="list-disc list-inside">
-                  {selectedStudent.commonMistakes.map((w,i) => <li key={i}>{w}</li>)}
-                </ul>
-              </div>
-
-              <div className="mb-4">
-                <h3 className="font-medium mb-1">Other Metrics</h3>
-                <ul className="list-disc list-inside">
-                  <li>Reading Rate: 85 WPM</li>
-                  <li>Hesitation Time: 1.2s average</li>
-                  <li>Target Words Completed: 35</li>
-                </ul>
-              </div>
-            </section>
-          </main>
-
-          {/* Accessibility / Font Size */}
-          <footer className="p-4 border-t border-gray-300 dark:border-gray-700 flex items-center gap-2">
-            <label htmlFor="font-size" className="font-medium">Font Size</label>
-            <select id="font-size" className="p-1 rounded" onChange={e=>setFontSize(e.target.value)}>
-              <option value="16px">Default</option>
-              <option value="18px">Large</option>
-              <option value="20px">Extra Large</option>
-            </select>
-          </footer>
+  if (!loggedIn) {
+    return (
+      <div className="min-h-screen flex flex-col justify-center items-center bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white p-4">
+        <h1 className="text-3xl font-bold mb-6">Teacher Login</h1>
+        <div className="flex flex-col gap-4 w-full max-w-xs">
+          <button
+            onClick={() => setLoggedIn(true)}
+            className="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded flex items-center justify-center"
+          >
+            <img src="https://upload.wikimedia.org/wikipedia/commons/5/53/Google_%22G%22_Logo.svg" alt="Google Logo" className="w-5 h-5 mr-2" />
+            Sign in with Google
+          </button>
+          <button
+            onClick={() => setLoggedIn(true)}
+            className="bg-gray-800 hover:bg-gray-900 text-white font-medium py-2 px-4 rounded flex items-center justify-center"
+          >
+            <img src="https://upload.wikimedia.org/wikipedia/commons/4/44/Microsoft_logo.svg" alt="Microsoft Logo" className="w-5 h-5 mr-2" />
+            Sign in with Microsoft
+          </button>
         </div>
-      );
-    }
+      </div>
+    );
+  }
 
-    ReactDOM.createRoot(document.getElementById("root")).render(<App />);
-  </script>
+  return (
+    <div style={{ fontSize }} className="min-h-screen">
+      {/* Header */}
+      <header className="flex justify-between items-center p-4 shadow-md rounded bg-white dark:bg-gray-900 text-gray-900 dark:text-white">
+        <h1 className="text-2xl font-medium">Teacher Dashboard</h1>
+        <div className="flex items-center gap-4">
+          <input id="dark-mode-toggle" type="checkbox" checked={darkMode} onChange={toggleDarkMode} className="h-5 w-5 cursor-pointer" />
+          <span>Dark Mode</span>
+        </div>
+      </header>
+
+      <main className="flex flex-col md:flex-row p-6 gap-6">
+        {/* Student List */}
+        <aside className="w-full md:w-64 border border-gray-300 dark:border-gray-700 p-2 rounded bg-gray-100 dark:bg-gray-800">
+          <h2 className="text-lg font-semibold mb-2">Students</h2>
+          <ul>
+            {students.map(s => (
+              <li key={s.id}>
+                <button
+                  onClick={() => setSelectedStudent(s)}
+                  className={getStudentButtonClasses(s)}
+                >
+                  {s.name}
+                </button>
+              </li>
+            ))}
+          </ul>
+          <div className="mt-4">
+            <label htmlFor="colorblind" className="font-medium">Colorblind Mode:</label>
+            <select id="colorblind" className="ml-2 p-1 rounded" value={colorblindMode} onChange={e=>setColorblindMode(e.target.value)}>
+              <option value="normal">Normal</option>
+              <option value="protanopia">Protanopia</option>
+              <option value="deuteranopia">Deuteranopia</option>
+              <option value="tritanopia">Tritanopia</option>
+            </select>
+          </div>
+        </aside>
+
+        {/* Student Details */}
+        <section className="flex-1 p-4 rounded shadow-md bg-white dark:bg-gray-900 text-gray-900 dark:text-white">
+          <h2 className="text-xl font-semibold mb-4">{selectedStudent.name}</h2>
+
+          <div className="mb-4">
+            <label className="block font-medium mb-1">Progress</label>
+            <progress value={selectedStudent.progress} max="1" className="w-full h-4 rounded"></progress>
+            <span className="text-sm ml-1">{Math.round(selectedStudent.progress*100)}%</span>
+          </div>
+
+          <div className="mb-4">
+            <label className="block font-medium mb-1">Accuracy</label>
+            <progress value={selectedStudent.accuracy} max="1" className="w-full h-4 rounded"></progress>
+            <span className="text-sm ml-1">{Math.round(selectedStudent.accuracy*100)}%</span>
+          </div>
+
+          <div className="mb-4">
+            <h3 className="font-medium mb-1">Words Practiced</h3>
+            <p>{selectedStudent.wordsPracticed}</p>
+          </div>
+
+          <div className="mb-4">
+            <h3 className="font-medium mb-1">Common Mistakes</h3>
+            <ul className="list-disc list-inside">
+              {selectedStudent.commonMistakes.map((w,i) => <li key={i}>{w}</li>)}
+            </ul>
+          </div>
+
+          <div className="mb-4">
+            <h3 className="font-medium mb-1">Other Metrics</h3>
+            <ul className="list-disc list-inside">
+              <li>Reading Rate: 85 WPM</li>
+              <li>Hesitation Time: 1.2s average</li>
+              <li>Target Words Completed: 35</li>
+            </ul>
+          </div>
+        </section>
+      </main>
+
+      {/* Accessibility / Font Size */}
+      <footer className="p-4 border-t border-gray-300 dark:border-gray-700 flex items-center gap-2">
+        <label htmlFor="font-size" className="font-medium">Font Size:</label>
+        <select id="font-size" className="p-1 rounded" value={fontSize} onChange={e=>setFontSize(e.target.value)}>
+          <option value="16px">Default</option>
+          <option value="18px">Large</option>
+          <option value="20px">Extra Large</option>
+        </select>
+      </footer>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
 </body>
 </html>
