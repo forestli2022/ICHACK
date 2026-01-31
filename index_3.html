@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Teacher Pro Dashboard | OpenRouter Suite</title>
+  <title>Teacher Pro Dashboard | Phonics Intervention</title>
   <script>window.tailwindConfig = { darkMode: 'class' };</script>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
@@ -21,6 +21,8 @@
     }
     .custom-scroll::-webkit-scrollbar { width: 4px; }
     .custom-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+    .animate-in { animation: fadeIn 0.3s ease-out; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
   </style>
 </head>
 <body class="bg-gray-50 text-gray-900 dark:bg-gray-950 dark:text-gray-100 transition-colors duration-200 min-h-screen">
@@ -30,16 +32,16 @@
 const { useState, useMemo, useEffect } = React;
 
 const initialStudents = [
-  { id: 1, name: "Alice Johnson", progress: 0.78, accuracy: 0.82, target: 0.90, commonMistakes: ["th","sh"], mastered: ["s", "a", "t", "p", "i", "n"], wordsPracticed: 120, history: [65, 72, 68, 79, 82] },
-  { id: 2, name: "Ben Carter", progress: 0.56, accuracy: 0.55, target: 0.85, commonMistakes: ["s","ch"], mastered: ["m", "a", "d"], wordsPracticed: 95, history: [80, 75, 72, 68, 65] },
-  { id: 3, name: "Clara Smith", progress: 0.91, accuracy: 0.88, target: 0.95, commonMistakes: ["r","l"], mastered: ["s", "a", "t", "p", "i", "n", "m", "d", "g", "o"], wordsPracticed: 150, history: [70, 75, 80, 85, 88] },
-  { id: 4, name: "Daniel Wu", progress: 0.67, accuracy: 0.73, target: 0.80, commonMistakes: ["a","i"], mastered: ["s", "t", "p"], wordsPracticed: 110, history: [72, 74, 73, 72, 73] },
-  { id: 5, name: "Eva Patel", progress: 0.82, accuracy: 0.90, target: 0.95, commonMistakes: ["th","s"], mastered: ["a", "n", "i", "p"], wordsPracticed: 140, history: [80, 82, 85, 87, 90] },
+  { id: 1, name: "Alice Johnson", progress: 0.78, accuracy: 0.82, target: 0.90, commonMistakes: ["th","sh"], mastered: ["s", "a", "t", "p", "i", "n"], wordsPracticed: 120, history: [65, 72, 68, 79, 82], stamina: 8 },
+  { id: 2, name: "Ben Carter", progress: 0.56, accuracy: 0.55, target: 0.85, commonMistakes: ["s","ch"], mastered: ["m", "a", "d"], wordsPracticed: 95, history: [80, 75, 72, 68, 65], stamina: 4 },
+  { id: 3, name: "Clara Smith", progress: 0.91, accuracy: 0.88, target: 0.95, commonMistakes: ["r","l"], mastered: ["s", "a", "t", "p", "i", "n", "m", "d", "g", "o"], wordsPracticed: 150, history: [70, 75, 80, 85, 88], stamina: 12 },
+  { id: 4, name: "Daniel Wu", progress: 0.67, accuracy: 0.73, target: 0.80, commonMistakes: ["a","i"], mastered: ["s", "t", "p"], wordsPracticed: 110, history: [72, 74, 73, 72, 73], stamina: 6 },
+  { id: 5, name: "Eva Patel", progress: 0.82, accuracy: 0.90, target: 0.95, commonMistakes: ["th","s"], mastered: ["a", "n", "i", "p"], wordsPracticed: 140, history: [80, 82, 85, 87, 90], stamina: 10 },
 ];
 
 function App() {
-  const [step, setStep] = useState('auth');
   const [apiKey, setApiKey] = useState(() => localStorage.getItem("teacher_ai_key") || "");
+  const [step, setStep] = useState('auth'); 
   const [selectedModel, setSelectedModel] = useState("google/gemini-2.0-flash-001");
   const [students] = useState(initialStudents);
   const [selectedId, setSelectedId] = useState(1);
@@ -48,6 +50,8 @@ function App() {
   const [aiResponse, setAiResponse] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
   const [apiStatus, setApiStatus] = useState("idle"); 
+  const [sessionNotes, setSessionNotes] = useState("");
+  const [copied, setCopied] = useState(false);
   
   const [darkMode, setDarkMode] = useState(false);
   const [fontSize, setFontSize] = useState("16px");
@@ -55,11 +59,17 @@ function App() {
 
   const selectedStudent = students.find(s => s.id === selectedId);
 
-  useEffect(() => { localStorage.setItem("teacher_ai_key", apiKey); }, [apiKey]);
+  useEffect(() => { if(apiKey) localStorage.setItem("teacher_ai_key", apiKey); }, [apiKey]);
   useEffect(() => { document.documentElement.classList.toggle('dark', darkMode); }, [darkMode]);
 
+  const copyToClipboard = () => {
+    navigator.clipboard.writeText(aiResponse);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
   const checkStatus = async () => {
-    if (!apiKey) return alert("Enter a key first!");
+    if (!apiKey) return alert("Please enter your OpenRouter key.");
     setApiStatus("checking");
     try {
       const res = await fetch("https://openrouter.ai/api/v1/auth/key", {
@@ -69,10 +79,7 @@ function App() {
       const data = await res.json();
       if (data.data) setApiStatus("success");
       else setApiStatus("error");
-    } catch (e) { 
-      setApiStatus("error"); 
-      console.error(e);
-    }
+    } catch (e) { setApiStatus("error"); }
   };
 
   const callAI = async (type, val) => {
@@ -80,9 +87,17 @@ function App() {
     setIsGenerating(true);
     setAiResponse("");
     
-    const prompt = type === 'lesson' 
-      ? `Provide a short multisensory activity for ${selectedStudent.name} on the /${val}/ sound.`
-      : `Write a 4-sentence decodable story for ${selectedStudent.name}. ONLY use the mastered sounds: ${selectedStudent.mastered.join(", ")} AND the new target sound /${val}/. Keep it simple for a beginner reader.`;
+    let prompt = "";
+    if (type === 'lesson') {
+        prompt = `Design a 5-minute multisensory activity for ${selectedStudent.name} focusing on the /${val}/ sound.`;
+    } else if (type === 'story') {
+        prompt = `Write a short decodable story (max 50 words) for ${selectedStudent.name}. Vocabulary: [${selectedStudent.mastered.join(", ")}] plus target sound /${val}/.`;
+    } else if (type === 'group') {
+        const names = students.filter(s => selectedStudents.includes(s.id)).map(s => s.name).join(", ");
+        prompt = `Create a small-group phonics game for: ${names}. Shared goal, high engagement.`;
+    } else if (type === 'parent') {
+        prompt = `Write a warm, jargon-free 3-sentence update for the parents of ${selectedStudent.name}. Mention they are working on the /${val}/ sound and provide one simple 30-second tip for home practice.`;
+    }
 
     try {
       const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
@@ -93,19 +108,13 @@ function App() {
         },
         body: JSON.stringify({
           model: selectedModel,
-          messages: [
-            { role: "system", content: "You are an expert phonics coach specializing in the Science of Reading." },
-            { role: "user", content: prompt }
-          ]
+          messages: [{ role: "system", content: "You are a Literacy Coach using Science of Reading principles." }, { role: "user", content: prompt }]
         })
       });
-      
       const data = await res.json();
-      if (data.error) throw new Error(data.error.message || "API Error");
+      if (data.error) throw new Error(data.error.message);
       setAiResponse(data.choices[0].message.content);
-    } catch (e) {
-      setAiResponse(`⚠️ Error: ${e.message}. Check your key or browser console.`);
-    }
+    } catch (e) { setAiResponse(`⚠️ Error: ${e.message}`); }
     setIsGenerating(false);
   };
 
@@ -117,16 +126,11 @@ function App() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-blue-50 dark:bg-gray-950 p-6">
         <div className="bg-white dark:bg-gray-900 p-10 rounded-[2.5rem] shadow-2xl w-full max-w-md border dark:border-gray-800 text-center">
-          <div className="w-16 h-16 bg-blue-600 rounded-2xl mx-auto mb-6 flex items-center justify-center text-white text-3xl font-black italic">P</div>
+          <div className="w-16 h-16 bg-blue-600 rounded-2xl mx-auto mb-6 flex items-center justify-center text-white text-3xl font-black italic shadow-xl shadow-blue-500/20">P</div>
           <h2 className="text-3xl font-black mb-8 tracking-tight">Teacher Login</h2>
           <div className="space-y-4">
-            <button onClick={() => setStep('ai-setup')} className="w-full py-4 border-2 dark:border-gray-700 rounded-2xl font-bold flex items-center justify-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-all">
-              <img src="https://upload.wikimedia.org/wikipedia/commons/5/53/Google_%22G%22_Logo.svg" className="w-5 h-5" /> Google
-            </button>
-            <button onClick={() => setStep('ai-setup')} className="w-full py-4 border-2 dark:border-gray-700 rounded-2xl font-bold flex items-center justify-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-all">
-              <img src="https://upload.wikimedia.org/wikipedia/commons/4/44/Microsoft_logo.svg" className="w-5 h-5" /> Microsoft
-            </button>
-            <button onClick={() => setStep('ai-setup')} className="w-full py-4 bg-blue-600 text-white rounded-2xl font-bold shadow-lg">Email Access</button>
+            <button onClick={() => setStep('ai-setup')} className="w-full py-4 border-2 dark:border-gray-700 rounded-2xl font-bold flex items-center justify-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-all">Sign In</button>
+            <button onClick={() => setStep('dashboard')} className="w-full py-4 bg-blue-600 text-white rounded-2xl font-bold shadow-lg shadow-blue-500/30">Skip to Dashboard</button>
           </div>
         </div>
       </div>
@@ -137,28 +141,10 @@ function App() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-blue-50 dark:bg-gray-950 p-6">
         <div className="bg-white dark:bg-gray-900 p-10 rounded-[2.5rem] shadow-2xl w-full max-w-md border dark:border-gray-800">
-          <h2 className="text-2xl font-black mb-4 flex items-center gap-2">🔗 OpenRouter Key</h2>
-          <p className="text-sm text-gray-500 mb-6 font-medium">Connect your AI to generate personalized phonics lesson plans and decodable stories.</p>
-          <div className="space-y-6">
-            <div className="space-y-2">
-              <label className="text-[10px] font-black uppercase text-gray-400 px-1">API Key</label>
-              <input 
-                type="password" 
-                placeholder="sk-or-v1-..." 
-                value={apiKey} 
-                onChange={e => setApiKey(e.target.value)}
-                className="w-full bg-gray-50 dark:bg-gray-800 p-4 rounded-2xl border dark:border-gray-700 outline-none focus:ring-2 focus:ring-blue-500 transition-all"
-              />
-            </div>
-            <div className="flex flex-col gap-3">
-              <button onClick={() => setStep('dashboard')} className="w-full py-4 bg-blue-600 text-white rounded-2xl font-bold shadow-lg hover:bg-blue-700 transition-all">
-                Enter Dashboard
-              </button>
-              <button onClick={() => { setApiKey(""); setStep('dashboard'); }} className="w-full py-4 text-gray-400 font-bold hover:text-gray-600 transition-all">
-                Skip AI Features
-              </button>
-            </div>
-          </div>
+          <h2 className="text-2xl font-black mb-4">AI Configuration</h2>
+          <p className="text-xs text-gray-500 mb-6 font-medium">Connect OpenRouter to generate personalized phonics content.</p>
+          <input type="password" placeholder="sk-or-v1-..." value={apiKey} onChange={e => setApiKey(e.target.value)} className="w-full bg-gray-50 dark:bg-gray-800 p-4 rounded-2xl border dark:border-gray-700 outline-none mb-4" />
+          <button onClick={() => setStep('dashboard')} className="w-full py-4 bg-blue-600 text-white rounded-2xl font-bold">Launch Dashboard</button>
         </div>
       </div>
     );
@@ -168,43 +154,48 @@ function App() {
     <div style={{ fontSize }} className={`max-w-7xl mx-auto p-4 md:p-8 ${colorblindMode !== 'normal' ? colorblindMode : ''}`}>
       <nav className="no-print flex flex-wrap items-center justify-between gap-4 mb-8 bg-white dark:bg-gray-900 p-4 rounded-3xl border dark:border-gray-800 shadow-sm">
         <div className="flex items-center gap-4">
-          <select value={colorblindMode} onChange={e => setColorblindMode(e.target.value)} className="bg-gray-100 dark:bg-gray-800 rounded-xl px-3 py-1.5 text-xs font-bold border-none outline-none">
-            <option value="normal">Standard View</option>
-            <option value="protanopia">Protanopia</option>
-            <option value="deuteranopia">Deuteranopia</option>
-            <option value="tritanopia">Tritanopia</option>
-          </select>
-          <select value={fontSize} onChange={e => setFontSize(e.target.value)} className="bg-gray-100 dark:bg-gray-800 rounded-xl px-3 py-1.5 text-xs font-bold border-none">
-            <option value="14px">Small</option>
-            <option value="16px">Normal</option>
-            <option value="20px">Large</option>
-          </select>
-          <button onClick={() => setDarkMode(!darkMode)} className="p-2 bg-gray-100 dark:bg-gray-800 rounded-full">{darkMode ? '☀️' : '🌙'}</button>
-          <button onClick={() => {setApiKey(""); setStep('auth');}} className="text-[10px] font-black text-gray-400 hover:text-red-500 uppercase ml-4 tracking-tighter">Reset Session</button>
+          <button onClick={() => setDarkMode(!darkMode)} className="p-2 bg-gray-100 dark:bg-gray-800 rounded-full transition-transform active:scale-90">{darkMode ? '☀️' : '🌙'}</button>
+          <button onClick={() => {setApiKey(""); setStep('auth');}} className="text-[10px] font-black text-gray-400 uppercase tracking-widest hover:text-red-500 transition-colors">Reset Session</button>
         </div>
-        <button onClick={() => setStep('auth')} className="px-4 py-2 bg-red-50 dark:bg-red-900/20 text-red-600 font-black text-xs rounded-xl uppercase tracking-widest">Logout</button>
+        <div className="flex gap-4">
+            <div className="flex items-center gap-2 px-3 py-1 bg-gray-100 dark:bg-gray-800 rounded-xl">
+                 <div className={`w-2 h-2 rounded-full ${apiStatus === 'success' ? 'bg-emerald-500' : 'bg-amber-500'}`}></div>
+                 <span className="text-[10px] font-black uppercase">{apiStatus === 'success' ? 'AI Online' : 'AI Offline'}</span>
+            </div>
+            <button onClick={() => setStep('auth')} className="px-4 py-2 bg-red-50 text-red-600 font-black text-xs rounded-xl uppercase hover:bg-red-100 transition-all">Logout</button>
+        </div>
       </nav>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
         <aside className="no-print lg:col-span-3">
           <div className="bg-white dark:bg-gray-900 rounded-[2rem] p-6 border dark:border-gray-800 shadow-sm sticky top-8">
-            <input type="text" placeholder="Search Roster..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="w-full bg-gray-50 dark:bg-gray-800 rounded-2xl px-4 py-3 text-sm mb-6 outline-none focus:ring-2 focus:ring-blue-500" />
-            <div className="space-y-2 mb-6 max-h-[50vh] overflow-y-auto custom-scroll pr-2">
+            <h3 className="text-[10px] font-black uppercase text-gray-400 mb-4 px-1">Class Roster</h3>
+            <input type="text" placeholder="Search students..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="w-full bg-gray-50 dark:bg-gray-800 rounded-2xl px-4 py-3 text-sm mb-6 outline-none border border-transparent focus:border-blue-500 transition-all" />
+            <div className="space-y-2 mb-6 max-h-[40vh] overflow-y-auto custom-scroll pr-2">
               {students.filter(s => s.name.toLowerCase().includes(searchQuery.toLowerCase())).map(s => (
-                <div key={s.id} className="flex items-center gap-3 group">
-                  <input type="checkbox" checked={selectedStudents.includes(s.id)} onChange={() => toggleSelection(s.id)} className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
-                  <button onClick={() => setSelectedId(s.id)} className={`flex-1 flex items-center p-2.5 rounded-xl text-sm font-bold transition-all ${selectedId === s.id ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-600' : 'hover:bg-gray-50 dark:hover:bg-gray-800'}`}>
-                    <div className={`w-2 h-2 rounded-full mr-3 ${s.accuracy < 0.6 ? 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.5)]' : 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]'}`}></div>
-                    <span className="truncate">{s.name}</span>
+                <div key={s.id} className="flex items-center gap-3">
+                  <input type="checkbox" checked={selectedStudents.includes(s.id)} onChange={() => toggleSelection(s.id)} className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500" />
+                  <button onClick={() => setSelectedId(s.id)} className={`flex-1 text-left p-2.5 rounded-xl text-sm font-bold transition-all ${selectedId === s.id ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-600' : 'hover:bg-gray-50 dark:hover:bg-gray-800'}`}>
+                    {s.name}
                   </button>
                 </div>
               ))}
             </div>
             {selectedStudents.length > 0 && (
-              <button className="w-full py-4 bg-blue-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-blue-500/30">
-                Bulk Action ({selectedStudents.length})
+              <button onClick={() => callAI('group')} className="w-full py-4 bg-indigo-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-lg transform active:scale-95 transition-all">
+                Small Group Plan ({selectedStudents.length})
               </button>
             )}
+            
+            <div className="mt-8 border-t dark:border-gray-800 pt-6">
+                <h4 className="text-[10px] font-black uppercase text-gray-400 mb-3 px-1">Live Session Notes</h4>
+                <textarea 
+                    value={sessionNotes} 
+                    onChange={(e) => setSessionNotes(e.target.value)}
+                    placeholder="Jot down quick observations..."
+                    className="w-full bg-amber-50/50 dark:bg-gray-800 rounded-xl p-3 text-xs min-h-[120px] outline-none border border-amber-100 dark:border-gray-700 resize-none"
+                />
+            </div>
           </div>
         </aside>
 
@@ -215,101 +206,100 @@ function App() {
                 <h2 className="text-5xl font-black tracking-tighter">{selectedStudent.name}</h2>
                 <div className="flex flex-wrap gap-2 mt-4">
                   {selectedStudent.commonMistakes.map(m => (
-                    <span key={m} className="px-3 py-1 bg-red-50 dark:bg-red-900/20 text-red-600 text-[10px] font-black rounded-lg uppercase tracking-widest border border-red-100 dark:border-red-900/30">Target: /{m}/</span>
+                    <span key={m} className="px-3 py-1 bg-red-50 dark:bg-red-900/20 text-red-600 text-[10px] font-black rounded-lg uppercase tracking-widest border border-red-100 dark:border-red-900/20">Target: /{m}/</span>
                   ))}
-                  <span className="px-3 py-1 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 text-[10px] font-black rounded-lg uppercase tracking-widest border border-emerald-100 dark:border-emerald-900/30">Mastered: {selectedStudent.mastered.length}</span>
+                  <span className="px-3 py-1 bg-blue-50 dark:bg-blue-900/20 text-blue-600 text-[10px] font-black rounded-lg uppercase tracking-widest border border-blue-100 dark:border-blue-900/20">Mastered: {selectedStudent.mastered.length}</span>
                 </div>
               </div>
-              <button onClick={() => window.print()} className="no-print px-8 py-4 bg-gray-900 dark:bg-blue-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:scale-105 transition-all shadow-xl">Print Report</button>
+              <button onClick={() => window.print()} className="no-print px-8 py-4 bg-gray-900 dark:bg-blue-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl hover:scale-105 transition-all">Print Growth Report</button>
             </div>
 
-            {apiKey ? (
-              <div className="bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-gray-800 dark:to-gray-800 p-8 rounded-[2rem] border-2 border-blue-100 dark:border-blue-900/30 mb-10">
-                <div className="flex flex-wrap justify-between items-center gap-4 mb-6">
-                  <div className="flex items-center gap-3">
-                    <span className="text-2xl">✨</span>
-                    <h3 className="text-xl font-black italic">AI Intervention</h3>
-                    <button onClick={checkStatus} className={`ml-2 px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-tighter ${apiStatus === 'success' ? 'bg-emerald-500 text-white' : apiStatus === 'error' ? 'bg-red-500 text-white' : 'bg-gray-200 text-gray-500'}`}>
-                      {apiStatus === 'idle' ? 'Check Connection' : apiStatus === 'checking' ? 'Pinging...' : apiStatus === 'success' ? 'Connected' : 'Auth Error'}
-                    </button>
+            <div className="bg-blue-50 dark:bg-gray-800 p-8 rounded-[2rem] border-2 border-blue-100 dark:border-blue-900/30 mb-10">
+              <div className="flex flex-wrap justify-between items-center gap-4 mb-6">
+                <div className="flex items-center gap-3">
+                  <span className="text-2xl animate-bounce">✨</span>
+                  <h3 className="text-xl font-black italic tracking-tight">Instructional Co-Pilot</h3>
+                  <button onClick={checkStatus} className={`ml-2 px-3 py-1 rounded-full text-[8px] font-black uppercase ${apiStatus === 'success' ? 'bg-emerald-500 text-white' : 'bg-gray-200 dark:bg-gray-700'}`}>
+                    {apiStatus === 'success' ? 'Link Active' : 'Check Sync'}
+                  </button>
+                </div>
+                <select value={selectedModel} onChange={(e) => setSelectedModel(e.target.value)} className="bg-white dark:bg-gray-700 px-4 py-2 rounded-xl text-xs font-bold border dark:border-gray-600 outline-none">
+                  <option value="google/gemini-2.0-flash-001">Gemini 2.0</option>
+                  <option value="meta-llama/llama-3.1-8b-instruct">Llama 3.1</option>
+                  <option value="openai/gpt-4o-mini">GPT-4o Mini</option>
+                </select>
+              </div>
+              
+              <div className="space-y-4">
+                 <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest px-1">Actionable Interventions:</p>
+                 {selectedStudent.commonMistakes.map(m => (
+                  <div key={m} className="flex flex-wrap gap-2">
+                     <button onClick={() => callAI('lesson', m)} disabled={isGenerating} className="px-4 py-2 bg-white dark:bg-gray-700 rounded-xl font-black text-[9px] uppercase tracking-widest shadow-sm border border-blue-200 dark:border-gray-600 hover:bg-blue-50 transition-colors">
+                       Activity: /{m}/
+                     </button>
+                     <button onClick={() => callAI('story', m)} disabled={isGenerating} className="px-4 py-2 bg-indigo-600 text-white rounded-xl font-black text-[9px] uppercase tracking-widest shadow-sm hover:bg-indigo-700 transition-all">
+                       Story: /{m}/
+                     </button>
+                     <button onClick={() => callAI('parent', m)} disabled={isGenerating} className="px-4 py-2 bg-emerald-600 text-white rounded-xl font-black text-[9px] uppercase tracking-widest shadow-sm hover:bg-emerald-700 transition-all">
+                       📩 Parent Update
+                     </button>
                   </div>
-                  <select value={selectedModel} onChange={(e) => setSelectedModel(e.target.value)} className="bg-white dark:bg-gray-700 px-4 py-2 rounded-xl text-xs font-bold border dark:border-gray-600">
-                    <option value="google/gemini-2.0-flash-001">Gemini 2.0 (Fast)</option>
-                    <option value="meta-llama/llama-3.1-8b-instruct">Llama 3.1 (Reliable)</option>
-                    <option value="anthropic/claude-3-haiku">Claude Haiku</option>
-                    <option value="openai/gpt-4o-mini">GPT-4o Mini</option>
-                  </select>
-                </div>
-                
-                <div className="space-y-4">
-                   <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest">Select Intervention Strategy:</p>
-                   {selectedStudent.commonMistakes.map(m => (
-                    <div key={m} className="flex flex-wrap gap-2">
-                       <button onClick={() => callAI('lesson', m)} disabled={isGenerating} className="px-5 py-2.5 bg-white dark:bg-gray-700 rounded-xl font-black text-[9px] uppercase tracking-widest shadow-sm hover:shadow-md transition-all disabled:opacity-50 border border-blue-200 dark:border-gray-600">
-                         Create /{m}/ Activity
-                       </button>
-                       <button onClick={() => callAI('story', m)} disabled={isGenerating} className="px-5 py-2.5 bg-indigo-600 text-white rounded-xl font-black text-[9px] uppercase tracking-widest shadow-sm hover:shadow-md transition-all disabled:opacity-50">
-                         Generate /{m}/ Story
-                       </button>
-                    </div>
-                  ))}
-                </div>
+                ))}
+              </div>
 
-                {isGenerating && <div className="mt-6 text-blue-600 animate-pulse font-black uppercase text-[10px] tracking-widest">Consulting {selectedModel.split('/')[1]}...</div>}
-                {aiResponse && (
-                  <div className="mt-6 bg-white dark:bg-gray-900 p-8 rounded-2xl shadow-xl whitespace-pre-line text-sm border dark:border-gray-700 border-t-4 border-t-blue-500 relative">
-                    <button onClick={() => setAiResponse("")} className="absolute top-2 right-4 text-gray-400 hover:text-red-500 font-bold text-lg">×</button>
-                    {aiResponse}
+              {isGenerating && <div className="mt-6 text-blue-600 animate-pulse font-black uppercase text-[10px] tracking-widest flex items-center gap-2">
+                <div className="w-2 h-2 bg-blue-600 rounded-full animate-bounce"></div> Building content...
+              </div>}
+              {aiResponse && (
+                <div className="mt-6 bg-white dark:bg-gray-900 p-8 rounded-2xl shadow-xl whitespace-pre-line text-sm border dark:border-gray-700 border-t-4 border-t-blue-500 relative animate-in">
+                  <div className="flex justify-between items-start mb-4 no-print">
+                      <span className="text-[10px] font-black text-blue-500 uppercase tracking-widest">AI Result</span>
+                      <div className="flex gap-2">
+                        <button onClick={copyToClipboard} className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase transition-all ${copied ? 'bg-emerald-500 text-white' : 'bg-gray-100 dark:bg-gray-800 hover:bg-gray-200'}`}>
+                            {copied ? 'Copied!' : 'Copy Text'}
+                        </button>
+                        <button onClick={() => setAiResponse("")} className="text-gray-400 hover:text-red-500 font-bold text-lg">×</button>
+                      </div>
                   </div>
-                )}
-              </div>
-            ) : (
-              <div className="p-8 border-2 border-dashed dark:border-gray-800 rounded-[2rem] text-center mb-10">
-                <button onClick={() => setStep('ai-setup')} className="text-blue-500 font-bold text-sm hover:underline italic tracking-tight">Connect OpenRouter to enable AI Co-Pilot</button>
-              </div>
-            )}
-
-            <div className="mb-12">
-              <h4 className="text-[10px] font-black uppercase text-gray-400 mb-6 tracking-widest px-1">Growth History</h4>
-              <div className="bg-gray-50 dark:bg-gray-800/40 p-8 rounded-[2rem] border dark:border-gray-700 relative overflow-visible">
-                <svg viewBox="0 0 400 100" className="w-full h-32 overflow-visible">
-                  <path d={selectedStudent.history.map((v, i) => `${i === 0 ? 'M' : 'L'} ${(i * 100)},${100 - v}`).join(' ')} fill="none" stroke="#3b82f6" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"/>
-                  {selectedStudent.history.map((v, i) => (
-                    <g key={i}>
-                      <circle cx={i*100} cy={100-v} r="5" fill="#3b82f6" className="cursor-pointer transition-all hover:r-7"/>
-                      <text x={i*100} y={100-v-15} textAnchor="middle" fontSize="10" fontWeight="bold" fill="currentColor">{v}%</text>
-                    </g>
-                  ))}
-                </svg>
-                <div className="flex justify-between mt-6 text-[9px] font-black text-gray-400 uppercase tracking-widest">
-                  <span>Start</span>
-                  <span>Latest</span>
+                  {aiResponse}
                 </div>
-              </div>
+              )}
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div className="p-8 border-2 dark:border-gray-800 rounded-[2rem]">
-                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4 tracking-tighter">Current Mastery</p>
-                <div className="flex items-baseline gap-2">
-                  <p className="text-4xl font-black">{Math.round(selectedStudent.accuracy * 100)}%</p>
-                  <p className="text-sm font-bold text-gray-400">/ {Math.round(selectedStudent.target * 100)}%</p>
-                </div>
-                <div className="w-full h-2 bg-gray-100 dark:bg-gray-800 mt-4 rounded-full overflow-hidden">
-                  <div className="h-full bg-emerald-500 transition-all duration-1000" style={{width: `${(selectedStudent.accuracy / selectedStudent.target) * 100}%`}}></div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
+              <div className="p-8 border-2 dark:border-gray-800 rounded-[2rem] bg-white dark:bg-gray-900">
+                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">Reading Mastery</p>
+                <p className="text-4xl font-black mb-4">{Math.round(selectedStudent.accuracy * 100)}%</p>
+                <div className="w-full h-3 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
+                  <div className="h-full bg-gradient-to-r from-blue-400 to-blue-600" style={{width: `${selectedStudent.accuracy * 100}%`}}></div>
                 </div>
               </div>
-              <div className="p-8 border-2 dark:border-gray-800 rounded-[2rem]">
-                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4 tracking-tighter">Volume</p>
-                <p className="text-4xl font-black">{selectedStudent.wordsPracticed}</p>
-                <p className="text-[10px] font-bold text-gray-400 mt-2 uppercase">Words Tracked</p>
+              <div className="p-8 border-2 dark:border-gray-800 rounded-[2rem] bg-white dark:bg-gray-900">
+                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">Reading Stamina</p>
+                <p className="text-4xl font-black mb-4">{selectedStudent.stamina}m</p>
+                <p className="text-[10px] text-gray-400 font-bold uppercase tracking-tight">Minutes of Focused Reading</p>
               </div>
-              <div className="p-8 border-2 dark:border-gray-800 rounded-[2rem]">
-                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4 tracking-tighter">Status</p>
+              <div className="p-8 border-2 dark:border-gray-800 rounded-[2rem] bg-white dark:bg-gray-900">
+                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">Retention Index</p>
                 <p className={`text-2xl font-black uppercase italic ${selectedStudent.accuracy < 0.6 ? 'text-red-500' : 'text-emerald-500'}`}>
-                  {selectedStudent.accuracy < 0.6 ? '⚠️ Review' : '📈 On Track'}
+                  {selectedStudent.accuracy < 0.6 ? '⚠️ At Risk' : '📈 Advancing'}
                 </p>
+                <p className="text-[10px] text-gray-400 mt-2 font-bold">Based on last 5 sessions</p>
               </div>
+            </div>
+
+            <div className="bg-gray-50 dark:bg-gray-800/50 p-8 rounded-[2rem] border dark:border-gray-800">
+                <h4 className="text-[10px] font-black uppercase text-gray-400 mb-8 tracking-widest">Skill Breakdown: Mastered Sounds</h4>
+                <div className="flex flex-wrap gap-3">
+                    {selectedStudent.mastered.map(sound => (
+                        <div key={sound} className="w-12 h-12 flex items-center justify-center bg-white dark:bg-gray-700 rounded-xl border dark:border-gray-600 shadow-sm font-black text-blue-600 text-lg">
+                            {sound}
+                        </div>
+                    ))}
+                    <div className="w-12 h-12 flex items-center justify-center bg-blue-50 dark:bg-blue-900/30 rounded-xl border-2 border-dashed border-blue-200 dark:border-blue-700 text-blue-400 text-lg">
+                        +
+                    </div>
+                </div>
             </div>
           </div>
         </main>
