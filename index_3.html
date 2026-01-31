@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Teacher Dashboard</title>
+  <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@3.3.3/dist/tailwind.min.css" rel="stylesheet">
+</head>
+<body>
+  <div id="root"></div>
+  
+  <script type="text/babel">
+    // Paste the React code here (change 'export default' to just function TeacherDashboard() {...})
+    const { useState } = React;
+
+    const students = [
+      { id:1, name:"Alice Johnson", progress:0.78, accuracy:0.82, commonMistakes:["th","sh","r"], wordsPracticed:120 },
+      { id:2, name:"Ben Carter", progress:0.56, accuracy:0.65, commonMistakes:["s","ch","l"], wordsPracticed:95 },
+    ];
+
+    function TeacherDashboard() {
+      const [darkMode, setDarkMode] = useState(false);
+      const [selectedStudent, setSelectedStudent] = useState(students[0]);
+      const toggleDarkMode = () => setDarkMode(!darkMode);
+
+      return (
+        <div className={darkMode ? "bg-gray-900 text-gray-100 min-h-screen" : "bg-gray-50 text-gray-900 min-h-screen"}>
+          <header className="flex justify-between items-center p-4 shadow-md">
+            <h1 className="text-2xl font-medium">Teacher Dashboard</h1>
+            <div className="flex items-center gap-4">
+              <label htmlFor="dark-mode-toggle" className="sr-only">Toggle dark mode</label>
+              <input id="dark-mode-toggle" type="checkbox" checked={darkMode} onChange={toggleDarkMode} className="h-5 w-5 cursor-pointer"/>
+              <span className="select-none">Dark Mode</span>
+            </div>
+          </header>
+          <main className="flex p-6 gap-6">
+            <aside className="w-64 border-r border-gray-300 dark:border-gray-700 p-2">
+              <h2 className="text-lg font-semibold mb-2">Students</h2>
+              <ul>
+                {students.map(s => (
+                  <li key={s.id}>
+                    <button
+                      onClick={() => setSelectedStudent(s)}
+                      className={`w-full text-left p-2 rounded hover:bg-gray-200 dark:hover:bg-gray-700 focus:outline focus:outline-2 focus:outline-blue-500 ${selectedStudent.id===s.id ? "bg-blue-100 dark:bg-blue-700 font-semibold" : ""}`}
+                    >
+                      {s.name}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </aside>
+            <section className="flex-1 p-4 rounded shadow-md bg-white dark:bg-gray-800">
+              <h2 className="text-xl font-semibold mb-4">{selectedStudent.name}</h2>
+              <div className="mb-4">
+                <label className="block font-medium mb-1">Progress</label>
+                <progress value={selectedStudent.progress} max="1" className="w-full h-4 rounded"></progress>
+                <span className="text-sm ml-1">{Math.round(selectedStudent.progress*100)}%</span>
+              </div>
+              <div className="mb-4">
+                <label className="block font-medium mb-1">Accuracy</label>
+                <progress value={selectedStudent.accuracy} max="1" className="w-full h-4 rounded"></progress>
+                <span className="text-sm ml-1">{Math.round(selectedStudent.accuracy*100)}%</span>
+              </div>
+            </section>
+          </main>
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById("root")).render(<TeacherDashboard />);
+  </script>
+</body>
+</html>
