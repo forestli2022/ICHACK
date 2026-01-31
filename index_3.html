@@ -1,64 +1,42 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="bg-gray-50 text-gray-900">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Teacher Dashboard</title>
-  <!-- Tailwind CSS CDN -->
-  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@3.3.3/dist/tailwind.min.css" rel="stylesheet">
-  <!-- React and Babel CDN -->
+  <!-- Tailwind CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- React CDN -->
   <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 </head>
-<body class="bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100">
-
+<body class="min-h-screen">
   <div id="root"></div>
 
   <script type="text/babel">
-    const { useState } = React;
+    const { useState, useEffect } = React;
 
-    // Mock student data
     const students = [
-      {
-        id: 1,
-        name: "Alice Johnson",
-        progress: 0.78,
-        accuracy: 0.82,
-        commonMistakes: ["th", "sh", "r"],
-        wordsPracticed: 120,
-      },
-      {
-        id: 2,
-        name: "Ben Carter",
-        progress: 0.56,
-        accuracy: 0.65,
-        commonMistakes: ["s", "ch", "l"],
-        wordsPracticed: 95,
-      },
-      {
-        id: 3,
-        name: "Clara Smith",
-        progress: 0.91,
-        accuracy: 0.88,
-        commonMistakes: ["r", "l", "ed"],
-        wordsPracticed: 150,
-      },
+      { id: 1, name: "Alice Johnson", progress: 0.78, accuracy: 0.82, commonMistakes: ["th","sh","r"], wordsPracticed: 120 },
+      { id: 2, name: "Ben Carter", progress: 0.56, accuracy: 0.65, commonMistakes: ["s","ch","l"], wordsPracticed: 95 },
+      { id: 3, name: "Clara Smith", progress: 0.91, accuracy: 0.88, commonMistakes: ["r","l","ed"], wordsPracticed: 150 },
     ];
 
     function TeacherDashboard() {
       const [darkMode, setDarkMode] = useState(false);
       const [selectedStudent, setSelectedStudent] = useState(students[0]);
+      const [fontSize, setFontSize] = useState("16px");
 
-      const toggleDarkMode = () => setDarkMode(!darkMode);
-      const changeFontSize = (e) => {
-        document.documentElement.style.fontSize = e.target.value;
-      };
+      // Apply dark mode class to html
+      useEffect(() => {
+        document.documentElement.classList.toggle("dark", darkMode);
+      }, [darkMode]);
 
       return (
-        <div className={darkMode ? "bg-gray-900 text-gray-100 min-h-screen" : "bg-gray-50 text-gray-900 min-h-screen"}>
+        <div style={{ fontSize }} className="min-h-screen p-0 m-0">
           {/* Header */}
-          <header className="flex justify-between items-center p-4 shadow-md">
+          <header className="flex justify-between items-center p-4 shadow-md bg-white dark:bg-gray-800">
             <h1 className="text-2xl font-medium">Teacher Dashboard</h1>
             <div className="flex items-center gap-4">
               <label htmlFor="dark-mode-toggle" className="sr-only">Toggle dark mode</label>
@@ -66,28 +44,27 @@
                 id="dark-mode-toggle"
                 type="checkbox"
                 checked={darkMode}
-                onChange={toggleDarkMode}
+                onChange={() => setDarkMode(!darkMode)}
                 className="h-5 w-5 cursor-pointer"
               />
-              <span className="select-none">Dark Mode</span>
+              <span>Dark Mode</span>
             </div>
           </header>
 
-          {/* Main Content */}
-          <main className="flex p-6 gap-6">
+          <main className="flex flex-col md:flex-row p-6 gap-6">
             {/* Student List */}
-            <aside className="w-64 border-r border-gray-300 dark:border-gray-700 p-2">
+            <aside className="w-full md:w-64 border border-gray-300 dark:border-gray-700 p-2 rounded bg-gray-100 dark:bg-gray-900">
               <h2 className="text-lg font-semibold mb-2">Students</h2>
               <ul>
-                {students.map((student) => (
-                  <li key={student.id}>
+                {students.map(s => (
+                  <li key={s.id}>
                     <button
-                      onClick={() => setSelectedStudent(student)}
-                      className={`w-full text-left p-2 rounded hover:bg-gray-200 dark:hover:bg-gray-700 focus:outline focus:outline-2 focus:outline-blue-500 ${
-                        selectedStudent.id === student.id ? "bg-blue-100 dark:bg-blue-700 font-semibold" : ""
-                      }`}
+                      onClick={() => setSelectedStudent(s)}
+                      className={`w-full text-left p-2 rounded mb-1 ${
+                        selectedStudent.id===s.id ? "bg-blue-200 dark:bg-blue-700 font-semibold" : "hover:bg-gray-200 dark:hover:bg-gray-700"
+                      } focus:outline focus:outline-2 focus:outline-blue-500`}
                     >
-                      {student.name}
+                      {s.name}
                     </button>
                   </li>
                 ))}
@@ -98,45 +75,30 @@
             <section className="flex-1 p-4 rounded shadow-md bg-white dark:bg-gray-800">
               <h2 className="text-xl font-semibold mb-4">{selectedStudent.name}</h2>
 
-              {/* Progress */}
               <div className="mb-4">
                 <label className="block font-medium mb-1">Progress</label>
-                <progress
-                  value={selectedStudent.progress}
-                  max="1"
-                  className="w-full h-4 rounded"
-                ></progress>
-                <span className="text-sm ml-1">{Math.round(selectedStudent.progress * 100)}%</span>
+                <progress value={selectedStudent.progress} max="1" className="w-full h-4 rounded"></progress>
+                <span className="text-sm ml-1">{Math.round(selectedStudent.progress*100)}%</span>
               </div>
 
-              {/* Accuracy */}
               <div className="mb-4">
                 <label className="block font-medium mb-1">Accuracy</label>
-                <progress
-                  value={selectedStudent.accuracy}
-                  max="1"
-                  className="w-full h-4 rounded"
-                ></progress>
-                <span className="text-sm ml-1">{Math.round(selectedStudent.accuracy * 100)}%</span>
+                <progress value={selectedStudent.accuracy} max="1" className="w-full h-4 rounded"></progress>
+                <span className="text-sm ml-1">{Math.round(selectedStudent.accuracy*100)}%</span>
               </div>
 
-              {/* Words Practiced */}
               <div className="mb-4">
                 <h3 className="font-medium mb-1">Words Practiced</h3>
                 <p>{selectedStudent.wordsPracticed}</p>
               </div>
 
-              {/* Common Mistakes */}
               <div className="mb-4">
                 <h3 className="font-medium mb-1">Common Mistakes</h3>
                 <ul className="list-disc list-inside">
-                  {selectedStudent.commonMistakes.map((word, idx) => (
-                    <li key={idx}>{word}</li>
-                  ))}
+                  {selectedStudent.commonMistakes.map((w,i) => <li key={i}>{w}</li>)}
                 </ul>
               </div>
 
-              {/* Other Metrics */}
               <div className="mb-4">
                 <h3 className="font-medium mb-1">Other Metrics</h3>
                 <ul className="list-disc list-inside">
@@ -148,12 +110,10 @@
             </section>
           </main>
 
-          {/* Accessibility Options */}
+          {/* Accessibility / Font Size */}
           <footer className="p-4 border-t border-gray-300 dark:border-gray-700">
-            <label htmlFor="font-size" className="mr-2 font-medium">
-              Font Size
-            </label>
-            <select id="font-size" className="p-1 rounded" onChange={changeFontSize}>
+            <label htmlFor="font-size" className="mr-2 font-medium">Font Size</label>
+            <select id="font-size" className="p-1 rounded" onChange={e=>setFontSize(e.target.value)}>
               <option value="16px">Default</option>
               <option value="18px">Large</option>
               <option value="20px">Extra Large</option>
