@@ -250,6 +250,7 @@ function App() {
     return { total, urgent, onTrack, avgAccuracy };
   }, [students]);
 
+if (step === 'dashboard') {
   return (
     <div style={{ fontSize }} className={`max-w-7xl mx-auto p-4 md:p-8 ${colorblindMode !== 'normal' ? colorblindMode : ''}`}>
       <nav className="no-print flex flex-wrap items-center justify-between gap-4 mb-8 bg-white dark:bg-gray-900 p-4 rounded-3xl border dark:border-gray-800 shadow-sm">
@@ -470,7 +471,7 @@ function App() {
     </div>
   );
 }
-
+}
 ReactDOM.createRoot(document.getElementById("root")).render(<App />);
 </script>
 </body>
