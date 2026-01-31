@@ -47,7 +47,7 @@ function App() {
   const [selectedStudents, setSelectedStudents] = useState([]);
   const [aiResponse, setAiResponse] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
-  const [apiStatus, setApiStatus] = useState("idle"); // idle, checking, success, error
+  const [apiStatus, setApiStatus] = useState("idle"); 
   
   const [darkMode, setDarkMode] = useState(false);
   const [fontSize, setFontSize] = useState("16px");
@@ -63,12 +63,20 @@ function App() {
     setApiStatus("checking");
     try {
       const res = await fetch("https://openrouter.ai/api/v1/auth/key", {
-        headers: { "Authorization": `Bearer ${apiKey.trim()}` }
+        method: "GET",
+        headers: { 
+          "Authorization": `Bearer ${apiKey.trim()}`
+        }
       });
       const data = await res.json();
-      if (data.data) setApiStatus("success");
-      else setApiStatus("error");
-    } catch (e) { setApiStatus("error"); }
+      if (data.data) {
+        setApiStatus("success");
+      } else {
+        setApiStatus("error");
+      }
+    } catch (e) { 
+      setApiStatus("error"); 
+    }
   };
 
   const callAI = async (sound) => {
@@ -80,9 +88,7 @@ function App() {
         method: "POST",
         headers: { 
           "Content-Type": "application/json", 
-          "Authorization": `Bearer ${apiKey.trim()}`,
-          "HTTP-Referer": "https://dashboard.teacher.pro", // Neutral referer to fix cookie error
-          "X-Title": "Teacher Phonics Helper"
+          "Authorization": `Bearer ${apiKey.trim()}`
         },
         body: JSON.stringify({
           model: selectedModel,
@@ -92,11 +98,20 @@ function App() {
           ]
         })
       });
+      
       const data = await res.json();
-      if (data.error) throw new Error(data.error.message);
-      setAiResponse(data.choices[0].message.content);
+      
+      if (data.error) {
+        throw new Error(data.error.message || "API Error");
+      }
+      
+      if (data.choices && data.choices[0]) {
+        setAiResponse(data.choices[0].message.content);
+      } else {
+        throw new Error("No response content received.");
+      }
     } catch (e) {
-      setAiResponse(`⚠️ Error: ${e.message}. Try switching models if "cookie auth" error persists.`);
+      setAiResponse(`⚠️ Error: ${e.message}. If this is a 'Cookie' error, ensure your API key is correct and you aren't using a VPN or strict AdBlocker.`);
     }
     setIsGenerating(false);
   };
@@ -130,7 +145,7 @@ function App() {
       <div className="min-h-screen flex items-center justify-center bg-blue-50 dark:bg-gray-950 p-6">
         <div className="bg-white dark:bg-gray-900 p-10 rounded-[2.5rem] shadow-2xl w-full max-w-md border dark:border-gray-800">
           <h2 className="text-2xl font-black mb-4 flex items-center gap-2">🔗 OpenRouter Key</h2>
-          <p className="text-sm text-gray-500 mb-6 font-medium">Use a static referer to avoid cookie errors.</p>
+          <p className="text-sm text-gray-500 mb-6 font-medium">Connect your AI to generate personalized phonics lesson plans on the fly.</p>
           <div className="space-y-6">
             <div className="space-y-2">
               <label className="text-[10px] font-black uppercase text-gray-400 px-1">API Key</label>
