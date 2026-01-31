@@ -1,4 +1,5 @@
 import os
+import random
 from dotenv import load_dotenv
 from openai import OpenAI
 from typing import List, Dict, Optional
@@ -15,7 +16,9 @@ def generate_story(
     interests: List[str],
     age: int,
     known_words: List[str],
-    focus_words: Optional[List[str]] = None
+    focus_words: Optional[List[str]] = None,
+    style_hint: Optional[str] = None,
+    avoid_titles: Optional[List[str]] = None
 ) -> Dict:
     """
     Generate a story using OpenAI GPT based on user's reading level and interests.
@@ -35,12 +38,34 @@ def generate_story(
     interests_str = ", ".join(interests) if interests else "animals and adventures"
     
     focus_words = focus_words or []
+    avoid_titles = avoid_titles or []
     focus_words_str = ", ".join(focus_words)
 
     focus_requirement = (
         f"- Include and naturally use these focus words: {focus_words_str}"
         if focus_words
         else "- No required focus words"
+    )
+
+    story_seed = random.choice([
+        "a rainy day mystery",
+        "a sunny park adventure",
+        "a trip to a tiny village",
+        "a surprise visit to a lighthouse",
+        "a picnic by a sparkling lake",
+        "a journey on a little boat",
+        "a friendly festival in town",
+        "a cozy night in a treehouse"
+    ])
+
+    avoid_line = ""
+    if avoid_titles:
+        avoid_line = f"Avoid stories or titles too similar to: {'; '.join(avoid_titles[:3])}"
+
+    style_hint_line = (
+        f"Extra guidance: {style_hint}"
+        if style_hint
+        else "Extra guidance: keep the language varied and engaging"
     )
 
     prompt = f"""Write a children's story for a {age}-year-old child at a {reading_level} reading level.
@@ -50,6 +75,9 @@ Requirements:
 - Topics the child likes: {interests_str}
 - Reading level: {reading_level}
 - {focus_requirement}
+- Use this story seed for variety: {story_seed}
+- {style_hint_line}
+{avoid_line}
 - Use simple, age-appropriate language
 - Include a clear beginning, middle, and end
 - Make it engaging and fun
