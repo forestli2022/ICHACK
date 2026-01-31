@@ -21,9 +21,13 @@
       { id: 1, name: "Alice Johnson", progress: 0.78, accuracy: 0.82, commonMistakes: ["th","sh","r"], wordsPracticed: 120 },
       { id: 2, name: "Ben Carter", progress: 0.56, accuracy: 0.65, commonMistakes: ["s","ch","l"], wordsPracticed: 95 },
       { id: 3, name: "Clara Smith", progress: 0.91, accuracy: 0.88, commonMistakes: ["r","l","ed"], wordsPracticed: 150 },
+      { id: 4, name: "Daniel Wu", progress: 0.67, accuracy: 0.73, commonMistakes: ["a","i","o"], wordsPracticed: 110 },
+      { id: 5, name: "Eva Patel", progress: 0.82, accuracy: 0.90, commonMistakes: ["th","s"], wordsPracticed: 140 },
+      { id: 6, name: "Frank Lopez", progress: 0.49, accuracy: 0.58, commonMistakes: ["ch","r"], wordsPracticed: 80 },
     ];
 
-    function TeacherDashboard() {
+    function App() {
+      const [loggedIn, setLoggedIn] = useState(false);
       const [darkMode, setDarkMode] = useState(false);
       const [selectedStudent, setSelectedStudent] = useState(students[0]);
       const [fontSize, setFontSize] = useState("16px");
@@ -33,10 +37,36 @@
         document.documentElement.classList.toggle("dark", darkMode);
       }, [darkMode]);
 
+      if (!loggedIn) {
+        // Mock login page
+        return (
+          <div className="min-h-screen flex flex-col justify-center items-center bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white p-4">
+            <h1 className="text-3xl font-bold mb-6">Teacher Login</h1>
+            <div className="flex flex-col gap-4 w-full max-w-xs">
+              <button
+                onClick={() => setLoggedIn(true)}
+                className="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded flex items-center justify-center"
+              >
+                <img src="https://upload.wikimedia.org/wikipedia/commons/5/53/Google_%22G%22_Logo.svg" alt="Google Logo" className="w-5 h-5 mr-2" />
+                Sign in with Google
+              </button>
+              <button
+                onClick={() => setLoggedIn(true)}
+                className="bg-gray-800 hover:bg-gray-900 text-white font-medium py-2 px-4 rounded flex items-center justify-center"
+              >
+                <img src="https://upload.wikimedia.org/wikipedia/commons/4/44/Microsoft_logo.svg" alt="Microsoft Logo" className="w-5 h-5 mr-2" />
+                Sign in with Microsoft
+              </button>
+            </div>
+          </div>
+        );
+      }
+
+      // Teacher Dashboard
       return (
-        <div style={{ fontSize }} className="min-h-screen p-0 m-0">
+        <div style={{ fontSize }} className={`min-h-screen`}>
           {/* Header */}
-          <header className="flex justify-between items-center p-4 shadow-md bg-white dark:bg-gray-800">
+          <header className="flex justify-between items-center p-4 shadow-md rounded bg-white dark:bg-gray-900 text-gray-900 dark:text-white">
             <h1 className="text-2xl font-medium">Teacher Dashboard</h1>
             <div className="flex items-center gap-4">
               <label htmlFor="dark-mode-toggle" className="sr-only">Toggle dark mode</label>
@@ -53,7 +83,7 @@
 
           <main className="flex flex-col md:flex-row p-6 gap-6">
             {/* Student List */}
-            <aside className="w-full md:w-64 border border-gray-300 dark:border-gray-700 p-2 rounded bg-gray-100 dark:bg-gray-900">
+            <aside className="w-full md:w-64 border border-gray-300 dark:border-gray-700 p-2 rounded bg-gray-100 dark:bg-gray-800">
               <h2 className="text-lg font-semibold mb-2">Students</h2>
               <ul>
                 {students.map(s => (
@@ -72,7 +102,7 @@
             </aside>
 
             {/* Student Details */}
-            <section className="flex-1 p-4 rounded shadow-md bg-white dark:bg-gray-800">
+            <section className="flex-1 p-4 rounded shadow-md bg-white dark:bg-gray-900 text-gray-900 dark:text-white">
               <h2 className="text-xl font-semibold mb-4">{selectedStudent.name}</h2>
 
               <div className="mb-4">
@@ -111,8 +141,8 @@
           </main>
 
           {/* Accessibility / Font Size */}
-          <footer className="p-4 border-t border-gray-300 dark:border-gray-700">
-            <label htmlFor="font-size" className="mr-2 font-medium">Font Size</label>
+          <footer className="p-4 border-t border-gray-300 dark:border-gray-700 flex items-center gap-2">
+            <label htmlFor="font-size" className="font-medium">Font Size</label>
             <select id="font-size" className="p-1 rounded" onChange={e=>setFontSize(e.target.value)}>
               <option value="16px">Default</option>
               <option value="18px">Large</option>
@@ -123,7 +153,7 @@
       );
     }
 
-    ReactDOM.createRoot(document.getElementById("root")).render(<TeacherDashboard />);
+    ReactDOM.createRoot(document.getElementById("root")).render(<App />);
   </script>
 </body>
 </html>
