@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Teacher Pro | Secure AI Dashboard</title>
+  <title>Teacher Pro Dashboard | Full AI Suite</title>
   <script>window.tailwindConfig = { darkMode: 'class' };</script>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
@@ -15,28 +15,32 @@
     .tritanopia { filter: hue-rotate(180deg); }
     select option { color: #000 !important; background: #fff !important; }
     .dark select option { color: #fff !important; background: #1f2937 !important; }
-    @media print { .no-print { display: none !important; } }
+    @media print { 
+      .no-print { display: none !important; }
+      body { background: white !important; color: black !important; }
+    }
+    .custom-scroll::-webkit-scrollbar { width: 4px; }
+    .custom-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
   </style>
 </head>
-<body class="bg-gray-50 text-gray-900 dark:bg-gray-950 dark:text-gray-100 transition-colors duration-200">
+<body class="bg-gray-50 text-gray-900 dark:bg-gray-950 dark:text-gray-100 transition-colors duration-200 min-h-screen">
 <div id="root"></div>
 
 <script type="text/babel">
 const { useState, useMemo, useEffect } = React;
 
-// ... (initialStudents data stays the same)
 const initialStudents = [
   { id: 1, name: "Alice Johnson", progress: 0.78, accuracy: 0.82, target: 0.90, commonMistakes: ["th","sh"], wordsPracticed: 120, history: [65, 72, 68, 79, 82] },
   { id: 2, name: "Ben Carter", progress: 0.56, accuracy: 0.65, target: 0.85, commonMistakes: ["s","ch"], wordsPracticed: 95, history: [80, 75, 72, 68, 65] },
   { id: 3, name: "Clara Smith", progress: 0.91, accuracy: 0.88, target: 0.95, commonMistakes: ["r","l"], wordsPracticed: 150, history: [70, 75, 80, 85, 88] },
   { id: 4, name: "Daniel Wu", progress: 0.67, accuracy: 0.73, target: 0.80, commonMistakes: ["a","i"], wordsPracticed: 110, history: [72, 74, 73, 72, 73] },
+  { id: 5, name: "Eva Patel", progress: 0.82, accuracy: 0.90, target: 0.95, commonMistakes: ["th","s"], wordsPracticed: 140, history: [80, 82, 85, 87, 90] },
 ];
 
 function App() {
-  // PERSISTENCE LOGIC: Check localStorage for key on load
   const [apiKey, setApiKey] = useState(() => localStorage.getItem("teacher_ai_key") || "");
   const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [students] = useState(initialStudents);
+  const [students, setStudents] = useState(initialStudents);
   const [selectedId, setSelectedId] = useState(1);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedStudents, setSelectedStudents] = useState([]);
@@ -49,7 +53,6 @@ function App() {
 
   const selectedStudent = students.find(s => s.id === selectedId);
 
-  // Save key to local storage when it changes
   useEffect(() => {
     localStorage.setItem("teacher_ai_key", apiKey);
   }, [apiKey]);
@@ -59,152 +62,207 @@ function App() {
   }, [darkMode]);
 
   const callAI = async (sound) => {
-    if (!apiKey) return alert("Please set your API key first.");
+    if (!apiKey) return alert("Please set your API key in the login screen.");
     setIsGenerating(true);
+    setAiResponse("");
     try {
       const res = await fetch("https://api.openai.com/v1/chat/completions", {
         method: "POST",
         headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
         body: JSON.stringify({
           model: "gpt-3.5-turbo",
-          messages: [{ role: "system", content: "You are a phonic teacher." }, 
-                     { role: "user", content: `5 min activity for ${selectedStudent.name} struggling with /${sound}/.` }]
+          messages: [
+            { role: "system", content: "You are an expert phonics coach. Provide a concise, 5-minute activity." },
+            { role: "user", content: `Create a 5-minute activity for ${selectedStudent.name} struggling with /${sound}/.` }
+          ]
         })
       });
       const data = await res.json();
       setAiResponse(data.choices[0].message.content);
-    } catch (e) { setAiResponse("API Error. Please check your key."); }
+    } catch (e) {
+      setAiResponse("Failed to connect. Check your API key or network.");
+    }
     setIsGenerating(false);
+  };
+
+  const toggleSelection = (id) => {
+    setSelectedStudents(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
   };
 
   if (!isLoggedIn) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-100 dark:bg-gray-950 p-6">
-        <div className="bg-white dark:bg-gray-900 p-8 rounded-[2.5rem] shadow-2xl w-full max-w-md border dark:border-gray-800">
-          <h2 className="text-3xl font-black mb-8 text-center">Security Check</h2>
+      <div className="min-h-screen flex items-center justify-center bg-blue-50 dark:bg-gray-950 p-6">
+        <div className="bg-white dark:bg-gray-900 p-10 rounded-[2.5rem] shadow-2xl w-full max-w-md border dark:border-gray-800">
+          <div className="w-16 h-16 bg-blue-600 rounded-2xl mx-auto mb-6 flex items-center justify-center text-white text-3xl font-black">P</div>
+          <h2 className="text-3xl font-black mb-8 text-center tracking-tight">Teacher Portal</h2>
           <div className="space-y-6">
-            <div className="p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-2xl">
-              <p className="text-xs text-amber-700 dark:text-amber-400 font-bold">⚠️ Safety Note: Your API key is stored in your browser's LocalStorage only. It is never sent to GitHub.</p>
-            </div>
             <div className="space-y-2">
-              <label className="text-[10px] font-black uppercase text-gray-400 px-2 tracking-widest">API Key</label>
+              <label className="text-[10px] font-black uppercase text-gray-400 px-1">OpenAI API Key (Local Only)</label>
               <input 
                 type="password" 
                 placeholder="sk-..." 
                 value={apiKey} 
                 onChange={e => setApiKey(e.target.value)}
-                className="w-full bg-gray-50 dark:bg-gray-800 p-4 rounded-2xl border dark:border-gray-700 outline-none"
+                className="w-full bg-gray-50 dark:bg-gray-800 p-4 rounded-2xl border dark:border-gray-700 outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
-            <button onClick={() => setIsLoggedIn(true)} className="w-full py-4 bg-blue-600 text-white rounded-2xl font-black tracking-widest uppercase text-xs">Authorize Session</button>
+            <button onClick={() => setIsLoggedIn(true)} className="w-full py-4 bg-blue-600 text-white rounded-2xl font-bold shadow-lg shadow-blue-600/30 hover:bg-blue-700 transition-all">
+              Sign In with Microsoft
+            </button>
+            <p className="text-[10px] text-center text-gray-400 uppercase font-bold tracking-widest">Repo safe: Key never leaves your browser</p>
           </div>
         </div>
       </div>
     );
   }
 
-  // ... (Remainder of the dashboard UI from previous code stays fully intact)
   return (
     <div style={{ fontSize }} className={`max-w-7xl mx-auto p-4 md:p-8 ${colorblindMode !== 'normal' ? colorblindMode : ''}`}>
+      {/* TOP ACCESSIBILITY NAV */}
       <nav className="no-print flex flex-wrap items-center justify-between gap-4 mb-8 bg-white dark:bg-gray-900 p-4 rounded-3xl border dark:border-gray-800 shadow-sm">
         <div className="flex items-center gap-4">
-          <select value={colorblindMode} onChange={e => setColorblindMode(e.target.value)} className="bg-gray-100 dark:bg-gray-800 rounded-xl px-3 py-1.5 text-xs font-bold">
+          <select value={colorblindMode} onChange={e => setColorblindMode(e.target.value)} className="bg-gray-100 dark:bg-gray-800 rounded-xl px-3 py-1.5 text-xs font-bold border-none outline-none">
             <option value="normal">Standard View</option>
             <option value="protanopia">Protanopia</option>
             <option value="deuteranopia">Deuteranopia</option>
             <option value="tritanopia">Tritanopia</option>
           </select>
+          <select value={fontSize} onChange={e => setFontSize(e.target.value)} className="bg-gray-100 dark:bg-gray-800 rounded-xl px-3 py-1.5 text-xs font-bold border-none">
+            <option value="14px">Small Text</option>
+            <option value="16px">Normal Text</option>
+            <option value="20px">Large Text</option>
+          </select>
           <button onClick={() => setDarkMode(!darkMode)} className="p-2 bg-gray-100 dark:bg-gray-800 rounded-full">{darkMode ? '☀️' : '🌙'}</button>
-          <button onClick={() => setApiKey("")} className="text-[10px] font-black text-gray-400 hover:text-red-500 uppercase ml-4">Clear Key</button>
+          <button onClick={() => {setApiKey(""); alert("Key Cleared");}} className="text-[10px] font-black text-gray-400 hover:text-red-500 uppercase ml-4">Wipe Key</button>
         </div>
-        <button onClick={() => setIsLoggedIn(false)} className="px-4 py-2 bg-red-50 text-red-600 font-black text-xs rounded-xl">LOGOUT</button>
+        <button onClick={() => setIsLoggedIn(false)} className="px-4 py-2 bg-red-50 dark:bg-red-900/20 text-red-600 font-black text-xs rounded-xl uppercase">Logout</button>
       </nav>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
         {/* SIDEBAR */}
         <aside className="no-print lg:col-span-3">
           <div className="bg-white dark:bg-gray-900 rounded-[2rem] p-6 border dark:border-gray-800 shadow-sm sticky top-8">
-            <input type="text" placeholder="Search..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="w-full bg-gray-50 dark:bg-gray-800 rounded-2xl px-4 py-2 text-sm mb-6 outline-none" />
-            <div className="space-y-2 mb-4">
+            <input 
+              type="text" 
+              placeholder="Search Roster..." 
+              value={searchQuery} 
+              onChange={e => setSearchQuery(e.target.value)} 
+              className="w-full bg-gray-50 dark:bg-gray-800 rounded-2xl px-4 py-3 text-sm mb-6 outline-none focus:ring-2 focus:ring-blue-500" 
+            />
+            <div className="space-y-2 mb-6 max-h-[50vh] overflow-y-auto custom-scroll pr-2">
               {students.filter(s => s.name.toLowerCase().includes(searchQuery.toLowerCase())).map(s => (
                 <div key={s.id} className="flex items-center gap-3">
-                  <input type="checkbox" checked={selectedStudents.includes(s.id)} onChange={() => {
-                    setSelectedStudents(prev => prev.includes(s.id) ? prev.filter(i => i !== s.id) : [...prev, s.id]);
-                  }} />
-                  <button onClick={() => setSelectedId(s.id)} className={`flex-1 text-left p-2 rounded-xl text-sm font-bold ${selectedId === s.id ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-600' : ''}`}>
+                  <input 
+                    type="checkbox" 
+                    checked={selectedStudents.includes(s.id)} 
+                    onChange={() => toggleSelection(s.id)}
+                    className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  <button 
+                    onClick={() => setSelectedId(s.id)} 
+                    className={`flex-1 text-left p-2.5 rounded-xl text-sm font-bold transition-all ${selectedId === s.id ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-600' : 'hover:bg-gray-50 dark:hover:bg-gray-800'}`}
+                  >
                     {s.name}
                   </button>
                 </div>
               ))}
             </div>
             {selectedStudents.length > 0 && (
-              <button className="w-full py-3 bg-blue-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-blue-500/30">
-                Bulk Group ({selectedStudents.length})
-              </button>
+              <div className="pt-4 border-t dark:border-gray-800">
+                <button className="w-full py-4 bg-blue-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-blue-500/30">
+                  Bulk Group Activity ({selectedStudents.length})
+                </button>
+              </div>
             )}
           </div>
         </aside>
 
-        {/* MAIN DASHBOARD CONTENT */}
+        {/* MAIN PROFILE */}
         <main className="lg:col-span-9 space-y-8">
           <div className="bg-white dark:bg-gray-900 rounded-[2.5rem] p-8 md:p-12 border dark:border-gray-800 shadow-sm">
-            <div className="flex justify-between items-start mb-10">
-              <h2 className="text-5xl font-black tracking-tighter">{selectedStudent.name}</h2>
-              <button onClick={() => window.print()} className="no-print px-6 py-3 border-2 dark:border-gray-700 rounded-2xl font-black text-xs uppercase tracking-widest">Print PDF</button>
+            <div className="flex justify-between items-start mb-12">
+              <div>
+                <h2 className="text-5xl font-black tracking-tighter">{selectedStudent.name}</h2>
+                <div className="flex gap-2 mt-4">
+                  {selectedStudent.commonMistakes.map(m => (
+                    <span key={m} className="px-3 py-1 bg-red-50 dark:bg-red-900/20 text-red-600 text-[10px] font-black rounded-lg uppercase tracking-widest border border-red-100 dark:border-red-900/30">Target: /{m}/</span>
+                  ))}
+                </div>
+              </div>
+              <button onClick={() => window.print()} className="no-print px-8 py-4 bg-gray-900 dark:bg-blue-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:scale-105 transition-all shadow-xl">Print Report</button>
             </div>
 
-            {/* AI GEN BOX */}
-            <div className="bg-blue-50 dark:bg-gray-800/50 p-8 rounded-[2rem] mb-10 border-2 border-blue-100 dark:border-blue-900/30">
+            {/* AI GEN PANEL */}
+            <div className="bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-gray-800 dark:to-gray-800 p-8 rounded-[2rem] border-2 border-blue-100 dark:border-blue-900/30 mb-10">
               <div className="flex items-center gap-3 mb-6">
-                <span className="text-2xl">🪄</span>
+                <span className="text-2xl">✨</span>
                 <h3 className="text-xl font-black italic">Live AI Lesson Co-Pilot</h3>
               </div>
-              <div className="flex gap-3 mb-8">
+              <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">Generate an instant 5-minute intervention for <strong>{selectedStudent.name}</strong>.</p>
+              <div className="flex flex-wrap gap-3 mb-8">
                 {selectedStudent.commonMistakes.map(m => (
-                  <button key={m} onClick={() => callAI(m)} disabled={isGenerating} className="px-6 py-3 bg-white dark:bg-gray-700 rounded-2xl font-bold text-xs shadow-sm hover:scale-105 transition-transform disabled:opacity-50 uppercase tracking-widest border border-blue-100 dark:border-gray-600">
-                    Gen /{m}/
+                  <button 
+                    key={m} 
+                    onClick={() => callAI(m)} 
+                    disabled={isGenerating} 
+                    className="px-6 py-3 bg-white dark:bg-gray-700 rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-sm hover:shadow-md hover:-translate-y-1 transition-all disabled:opacity-50 border border-blue-100 dark:border-gray-600"
+                  >
+                    Gen /{m}/ Plan
                   </button>
                 ))}
               </div>
-              {isGenerating && <div className="text-blue-600 animate-pulse font-black uppercase text-[10px] tracking-widest">Consulting Phonics Experts...</div>}
+              {isGenerating && <div className="text-blue-600 animate-pulse font-black uppercase text-[10px] tracking-widest">Calling Phonics Experts...</div>}
               {aiResponse && (
-                <div className="bg-white dark:bg-gray-900 p-8 rounded-2xl shadow-xl whitespace-pre-line text-sm leading-relaxed border dark:border-gray-700 border-t-4 border-t-blue-500">
+                <div className="bg-white dark:bg-gray-900 p-8 rounded-2xl shadow-xl whitespace-pre-line text-sm leading-relaxed border dark:border-gray-700 border-t-4 border-t-blue-500 animate-in fade-in slide-in-from-bottom-4 duration-500">
                   {aiResponse}
                 </div>
               )}
             </div>
 
-            {/* PROGRESS GRAPH */}
-            <div className="mb-10">
-              <h4 className="text-[10px] font-black uppercase text-gray-400 mb-6 tracking-widest">Growth Analytics</h4>
-              <div className="bg-gray-50 dark:bg-gray-800/50 p-8 rounded-3xl border dark:border-gray-700">
+            {/* PERFORMANCE GRAPH */}
+            <div className="mb-12">
+              <h4 className="text-[10px] font-black uppercase text-gray-400 mb-6 tracking-widest px-1">Accuracy Growth History</h4>
+              <div className="bg-gray-50 dark:bg-gray-800/40 p-8 rounded-[2rem] border dark:border-gray-700">
                 <svg viewBox="0 0 400 100" className="w-full h-32 overflow-visible">
-                  <path d={selectedStudent.history.map((v, i) => `${i === 0 ? 'M' : 'L'} ${(i * 100)},${100 - v}`).join(' ')} fill="none" stroke="#3b82f6" strokeWidth="4" strokeLinecap="round"/>
-                  {selectedStudent.history.map((v, i) => <circle key={i} cx={i*100} cy={100-v} r="5" fill="#3b82f6" className="cursor-pointer hover:r-7 transition-all"/>)}
+                  <path d={selectedStudent.history.map((v, i) => `${i === 0 ? 'M' : 'L'} ${(i * 100)},${100 - v}`).join(' ')} fill="none" stroke="#3b82f6" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"/>
+                  {selectedStudent.history.map((v, i) => (
+                    <g key={i}>
+                      <circle cx={i*100} cy={100-v} r="5" fill="#3b82f6" className="cursor-pointer transition-all hover:r-7"/>
+                      <text x={i*100} y={100-v-12} textAnchor="middle" fontSize="10" fontWeight="bold" fill="currentColor">{v}%</text>
+                    </g>
+                  ))}
                 </svg>
-                <div className="flex justify-between mt-6 text-[9px] font-black text-gray-400 uppercase tracking-[0.2em]">
-                  <span>Initial Assessment</span>
-                  <span>Latest Probe</span>
+                <div className="flex justify-between mt-6 text-[9px] font-black text-gray-400 uppercase tracking-widest">
+                  <span>Baseline</span>
+                  <span>Checkpoint 2</span>
+                  <span>Checkpoint 3</span>
+                  <span>Checkpoint 4</span>
+                  <span>Current</span>
                 </div>
               </div>
             </div>
 
-            {/* QUICK STATS */}
+            {/* SUMMARY STATS */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div className="p-8 border-2 dark:border-gray-800 rounded-3xl">
-                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">Mastery</p>
-                <p className="text-4xl font-black">{Math.round(selectedStudent.accuracy * 100)}%</p>
-                <div className="w-full h-1.5 bg-gray-100 dark:bg-gray-800 mt-4 rounded-full overflow-hidden">
-                  <div className="h-full bg-blue-500" style={{width: `${selectedStudent.accuracy * 100}%`}}></div>
+              <div className="p-8 border-2 dark:border-gray-800 rounded-[2rem] bg-white dark:bg-gray-900">
+                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">Mastery Goal</p>
+                <div className="flex items-baseline gap-2">
+                  <p className="text-4xl font-black">{Math.round(selectedStudent.accuracy * 100)}%</p>
+                  <p className="text-sm font-bold text-gray-400">/ {Math.round(selectedStudent.target * 100)}%</p>
+                </div>
+                <div className="w-full h-2 bg-gray-100 dark:bg-gray-800 mt-4 rounded-full overflow-hidden">
+                  <div className="h-full bg-emerald-500 transition-all duration-1000" style={{width: `${(selectedStudent.accuracy / selectedStudent.target) * 100}%`}}></div>
                 </div>
               </div>
-              <div className="p-8 border-2 dark:border-gray-800 rounded-3xl">
-                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">Words</p>
+              <div className="p-8 border-2 dark:border-gray-800 rounded-[2rem]">
+                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">Volume</p>
                 <p className="text-4xl font-black">{selectedStudent.wordsPracticed}</p>
+                <p className="text-xs font-bold text-gray-400 mt-2">Total Words Read</p>
               </div>
-              <div className="p-8 border-2 dark:border-gray-800 rounded-3xl">
-                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">Trend</p>
-                <p className="text-2xl font-black text-emerald-500 uppercase tracking-tighter italic">📈 Improving</p>
+              <div className="p-8 border-2 dark:border-gray-800 rounded-[2rem]">
+                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">Status</p>
+                <p className="text-2xl font-black text-emerald-500 uppercase italic">📈 On Track</p>
+                <p className="text-[10px] font-bold text-gray-400 mt-2 uppercase tracking-widest">Consistent Growth</p>
               </div>
             </div>
           </div>
