@@ -28,6 +28,7 @@
 
 <script type="text/babel">
 const { useState, useMemo, useEffect } = React;
+const [rawNotes, setRawNotes] = useState("");
 
 const initialStudents = [
   { id: 1, name: "Alice Johnson", progress: 0.78, accuracy: 0.82, target: 0.90, commonMistakes: ["th","sh"], mastered: ["s", "a", "t", "p", "i", "n"], wordsPracticed: 120, history: [65, 72, 68, 79, 82] },
@@ -92,7 +93,10 @@ function App() {
         prompt = `Write a warm, professional, jargon-free 3-sentence update for the parents of ${selectedStudent.name}. Mention they are working on /${val}/ and give one simple tip for home practice that doesn't require extra materials.`;
     } else if (type === 'heart') {
         prompt = `Identify 5 'Heart Words' (high-frequency irregular words) that align with ${selectedStudent.name}'s current level. Explain which part of the word must be 'learned by heart'.`;
-    }
+    } else if (type === 'translate') {
+    prompt = `Translate these raw classroom observations into a professional, clinical progress report paragraph for ${selectedStudent.name}: "${val}" 
+    Guidelines: Use Science of Reading terminology (e.g., phonemic awareness, orthographic mapping, decoding). Stay objective and professional.`;
+}
 
     try {
       const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
@@ -238,6 +242,31 @@ function App() {
                 </div>
               </div>
               <button onClick={() => window.print()} className="no-print px-8 py-4 bg-gray-900 dark:bg-blue-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:scale-105 transition-all shadow-xl">Print Report</button>
+              <div className="bg-amber-50 dark:bg-gray-800/40 p-8 rounded-[2rem] border-2 border-amber-100 dark:border-amber-900/30 mb-10">
+                <div className="flex items-center gap-3 mb-4">
+                  <span className="text-2xl">📋</span>
+                  <h3 className="text-xl font-black italic">Clinical Report Translator</h3>
+                </div>
+                
+                <p className="text-[10px] font-black text-amber-600 dark:text-amber-400 uppercase tracking-widest mb-4">
+                  Convert raw notes into professional report language:
+                </p>
+
+                <textarea 
+                  value={rawNotes}
+                  onChange={(e) => setRawNotes(e.target.value)}
+                  placeholder="Example: Alice was guessing words based on the first letter today and struggled with the sh/ch distinction..."
+                  className="w-full bg-white dark:bg-gray-900 rounded-2xl p-4 text-sm min-h-[100px] outline-none border border-amber-200 dark:border-gray-700 mb-4"
+                />
+
+                <button 
+                  onClick={() => callAI('translate', rawNotes)}
+                  disabled={isGenerating || !rawNotes}
+                  className="px-6 py-3 bg-amber-600 text-white rounded-xl font-black text-[10px] uppercase tracking-widest shadow-lg hover:bg-amber-700 disabled:opacity-50 transition-all"
+                >
+                  {isGenerating ? 'Translating...' : 'Generate Professional Report'}
+                </button>
+              </div>
             </div>
 
             {apiKey ? (
@@ -270,6 +299,15 @@ function App() {
                       </button>
                       <button onClick={() => callAI('parent', m)} className="px-4 py-2 bg-emerald-600 text-white rounded-xl font-black text-[9px] uppercase tracking-widest shadow-sm">
                         📩 Parent Update
+                      </button>
+                      <button onClick={() => callAI('heart', m)} className="px-4 py-2 bg-amber-600 text-white rounded-xl font-black text-[9px] uppercase tracking-widest shadow-sm">
+                        ❤️ Heart Words
+                      </button>
+                      <button onClick={() => callAI('translate', rawNotes)} className="px-4 py-2 bg-purple-600 text-white rounded-xl font-black text-[9px] uppercase tracking-widest shadow-sm">
+                        📝 Translate Notes
+                      </button>
+                      <button onClick={() => callAI('group', m)} disabled={selectedStudents.length < 2 || isGenerating} className="px-5 py-2.5 bg-pink-600 text-white rounded-xl font-black text-[9px] uppercase tracking-widest shadow-sm hover:shadow-md transition-all disabled:opacity-50">
+                          👥 Group Game
                       </button>
                     </div>
                     ))}
