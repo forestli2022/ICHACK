@@ -30,11 +30,11 @@
 const { useState, useMemo, useEffect } = React;
 
 const initialStudents = [
-  { id: 1, name: "Alice Johnson", progress: 0.78, accuracy: 0.82, target: 0.90, commonMistakes: ["th","sh"], wordsPracticed: 120, history: [65, 72, 68, 79, 82] },
-  { id: 2, name: "Ben Carter", progress: 0.56, accuracy: 0.55, target: 0.85, commonMistakes: ["s","ch"], wordsPracticed: 95, history: [80, 75, 72, 68, 65] },
-  { id: 3, name: "Clara Smith", progress: 0.91, accuracy: 0.88, target: 0.95, commonMistakes: ["r","l"], wordsPracticed: 150, history: [70, 75, 80, 85, 88] },
-  { id: 4, name: "Daniel Wu", progress: 0.67, accuracy: 0.73, target: 0.80, commonMistakes: ["a","i"], wordsPracticed: 110, history: [72, 74, 73, 72, 73] },
-  { id: 5, name: "Eva Patel", progress: 0.82, accuracy: 0.90, target: 0.95, commonMistakes: ["th","s"], wordsPracticed: 140, history: [80, 82, 85, 87, 90] },
+  { id: 1, name: "Alice Johnson", progress: 0.78, accuracy: 0.82, target: 0.90, commonMistakes: ["th","sh"], mastered: ["s", "a", "t", "p", "i", "n"], wordsPracticed: 120, history: [65, 72, 68, 79, 82] },
+  { id: 2, name: "Ben Carter", progress: 0.56, accuracy: 0.55, target: 0.85, commonMistakes: ["s","ch"], mastered: ["m", "a", "d"], wordsPracticed: 95, history: [80, 75, 72, 68, 65] },
+  { id: 3, name: "Clara Smith", progress: 0.91, accuracy: 0.88, target: 0.95, commonMistakes: ["r","l"], mastered: ["s", "a", "t", "p", "i", "n", "m", "d", "g", "o"], wordsPracticed: 150, history: [70, 75, 80, 85, 88] },
+  { id: 4, name: "Daniel Wu", progress: 0.67, accuracy: 0.73, target: 0.80, commonMistakes: ["a","i"], mastered: ["s", "t", "p"], wordsPracticed: 110, history: [72, 74, 73, 72, 73] },
+  { id: 5, name: "Eva Patel", progress: 0.82, accuracy: 0.90, target: 0.95, commonMistakes: ["th","s"], mastered: ["a", "n", "i", "p"], wordsPracticed: 140, history: [80, 82, 85, 87, 90] },
 ];
 
 function App() {
@@ -64,25 +64,26 @@ function App() {
     try {
       const res = await fetch("https://openrouter.ai/api/v1/auth/key", {
         method: "GET",
-        headers: { 
-          "Authorization": `Bearer ${apiKey.trim()}`
-        }
+        headers: { "Authorization": `Bearer ${apiKey.trim()}` }
       });
       const data = await res.json();
-      if (data.data) {
-        setApiStatus("success");
-      } else {
-        setApiStatus("error");
-      }
+      if (data.data) setApiStatus("success");
+      else setApiStatus("error");
     } catch (e) { 
       setApiStatus("error"); 
+      console.error(e);
     }
   };
 
-  const callAI = async (sound) => {
+  const callAI = async (type, val) => {
     if (!apiKey) return alert("Please add your OpenRouter key.");
     setIsGenerating(true);
     setAiResponse("");
+    
+    const prompt = type === 'lesson' 
+      ? `Provide a short multisensory activity for ${selectedStudent.name} on the /${val}/ sound.`
+      : `Write a 4-sentence decodable story for ${selectedStudent.name}. ONLY use the mastered sounds: ${selectedStudent.mastered.join(", ")} AND the new target sound /${val}/. Keep it simple for a beginner reader.`;
+
     try {
       const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
         method: "POST",
@@ -93,25 +94,17 @@ function App() {
         body: JSON.stringify({
           model: selectedModel,
           messages: [
-            { role: "system", content: "You are an expert phonics coach. Provide a short multisensory activity." },
-            { role: "user", content: `5-minute activity for ${selectedStudent.name} on the /${sound}/ sound.` }
+            { role: "system", content: "You are an expert phonics coach specializing in the Science of Reading." },
+            { role: "user", content: prompt }
           ]
         })
       });
       
       const data = await res.json();
-      
-      if (data.error) {
-        throw new Error(data.error.message || "API Error");
-      }
-      
-      if (data.choices && data.choices[0]) {
-        setAiResponse(data.choices[0].message.content);
-      } else {
-        throw new Error("No response content received.");
-      }
+      if (data.error) throw new Error(data.error.message || "API Error");
+      setAiResponse(data.choices[0].message.content);
     } catch (e) {
-      setAiResponse(`⚠️ Error: ${e.message}. If this is a 'Cookie' error, ensure your API key is correct and you aren't using a VPN or strict AdBlocker.`);
+      setAiResponse(`⚠️ Error: ${e.message}. Check your key or browser console.`);
     }
     setIsGenerating(false);
   };
@@ -145,7 +138,7 @@ function App() {
       <div className="min-h-screen flex items-center justify-center bg-blue-50 dark:bg-gray-950 p-6">
         <div className="bg-white dark:bg-gray-900 p-10 rounded-[2.5rem] shadow-2xl w-full max-w-md border dark:border-gray-800">
           <h2 className="text-2xl font-black mb-4 flex items-center gap-2">🔗 OpenRouter Key</h2>
-          <p className="text-sm text-gray-500 mb-6 font-medium">Connect your AI to generate personalized phonics lesson plans on the fly.</p>
+          <p className="text-sm text-gray-500 mb-6 font-medium">Connect your AI to generate personalized phonics lesson plans and decodable stories.</p>
           <div className="space-y-6">
             <div className="space-y-2">
               <label className="text-[10px] font-black uppercase text-gray-400 px-1">API Key</label>
@@ -220,10 +213,11 @@ function App() {
             <div className="flex flex-col md:flex-row justify-between items-start gap-6 mb-12">
               <div>
                 <h2 className="text-5xl font-black tracking-tighter">{selectedStudent.name}</h2>
-                <div className="flex gap-2 mt-4">
+                <div className="flex flex-wrap gap-2 mt-4">
                   {selectedStudent.commonMistakes.map(m => (
                     <span key={m} className="px-3 py-1 bg-red-50 dark:bg-red-900/20 text-red-600 text-[10px] font-black rounded-lg uppercase tracking-widest border border-red-100 dark:border-red-900/30">Target: /{m}/</span>
                   ))}
+                  <span className="px-3 py-1 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 text-[10px] font-black rounded-lg uppercase tracking-widest border border-emerald-100 dark:border-emerald-900/30">Mastered: {selectedStudent.mastered.length}</span>
                 </div>
               </div>
               <button onClick={() => window.print()} className="no-print px-8 py-4 bg-gray-900 dark:bg-blue-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:scale-105 transition-all shadow-xl">Print Report</button>
@@ -239,27 +233,32 @@ function App() {
                       {apiStatus === 'idle' ? 'Check Connection' : apiStatus === 'checking' ? 'Pinging...' : apiStatus === 'success' ? 'Connected' : 'Auth Error'}
                     </button>
                   </div>
-                  <select 
-                    value={selectedModel} 
-                    onChange={(e) => setSelectedModel(e.target.value)}
-                    className="bg-white dark:bg-gray-700 px-4 py-2 rounded-xl text-xs font-bold border dark:border-gray-600"
-                  >
+                  <select value={selectedModel} onChange={(e) => setSelectedModel(e.target.value)} className="bg-white dark:bg-gray-700 px-4 py-2 rounded-xl text-xs font-bold border dark:border-gray-600">
                     <option value="google/gemini-2.0-flash-001">Gemini 2.0 (Fast)</option>
                     <option value="meta-llama/llama-3.1-8b-instruct">Llama 3.1 (Reliable)</option>
-                    <option value="anthropic/claude-3-haiku">Claude Haiku (Concise)</option>
+                    <option value="anthropic/claude-3-haiku">Claude Haiku</option>
                     <option value="openai/gpt-4o-mini">GPT-4o Mini</option>
                   </select>
                 </div>
-                <div className="flex flex-wrap gap-3 mb-8">
-                  {selectedStudent.commonMistakes.map(m => (
-                    <button key={m} onClick={() => callAI(m)} disabled={isGenerating} className="px-6 py-3 bg-white dark:bg-gray-700 rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-sm hover:shadow-md transition-all disabled:opacity-50 border dark:border-gray-600">
-                      Gen /{m}/ Plan
-                    </button>
+                
+                <div className="space-y-4">
+                   <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest">Select Intervention Strategy:</p>
+                   {selectedStudent.commonMistakes.map(m => (
+                    <div key={m} className="flex flex-wrap gap-2">
+                       <button onClick={() => callAI('lesson', m)} disabled={isGenerating} className="px-5 py-2.5 bg-white dark:bg-gray-700 rounded-xl font-black text-[9px] uppercase tracking-widest shadow-sm hover:shadow-md transition-all disabled:opacity-50 border border-blue-200 dark:border-gray-600">
+                         Create /{m}/ Activity
+                       </button>
+                       <button onClick={() => callAI('story', m)} disabled={isGenerating} className="px-5 py-2.5 bg-indigo-600 text-white rounded-xl font-black text-[9px] uppercase tracking-widest shadow-sm hover:shadow-md transition-all disabled:opacity-50">
+                         Generate /{m}/ Story
+                       </button>
+                    </div>
                   ))}
                 </div>
-                {isGenerating && <div className="text-blue-600 animate-pulse font-black uppercase text-[10px] tracking-widest">Consulting {selectedModel.split('/')[1]}...</div>}
+
+                {isGenerating && <div className="mt-6 text-blue-600 animate-pulse font-black uppercase text-[10px] tracking-widest">Consulting {selectedModel.split('/')[1]}...</div>}
                 {aiResponse && (
-                  <div className="bg-white dark:bg-gray-900 p-8 rounded-2xl shadow-xl whitespace-pre-line text-sm border dark:border-gray-700 border-t-4 border-t-blue-500">
+                  <div className="mt-6 bg-white dark:bg-gray-900 p-8 rounded-2xl shadow-xl whitespace-pre-line text-sm border dark:border-gray-700 border-t-4 border-t-blue-500 relative">
+                    <button onClick={() => setAiResponse("")} className="absolute top-2 right-4 text-gray-400 hover:text-red-500 font-bold text-lg">×</button>
                     {aiResponse}
                   </div>
                 )}
