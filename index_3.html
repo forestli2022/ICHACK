@@ -94,10 +94,20 @@ function App() {
         prompt = `Write a warm, professional, jargon-free 3-sentence update for the parents of ${selectedStudent.name}. Mention they are working on /${val}/ and give one simple tip for home practice that doesn't require extra materials.`;
     } else if (type === 'heart') {
         prompt = `Identify 5 'Heart Words' (high-frequency irregular words) that align with ${selectedStudent.name}'s current level. Explain which part of the word must be 'learned by heart'.`;
+        
     } else if (type === 'translate') {
     prompt = `Translate these raw classroom observations into a professional, clinical progress report paragraph for ${selectedStudent.name}: "${val}" 
     Guidelines: Use Science of Reading terminology (e.g., phonemic awareness, orthographic mapping, decoding). Stay objective and professional.`;
+
+    } else if (type === 'goal') {
+    prompt = `Write a SMART IEP goal for ${selectedStudent.name}. 
+    Current Accuracy: ${Math.round(selectedStudent.accuracy * 100)}%
+    Target Accuracy: ${Math.round(selectedStudent.target * 100)}%
+    Specific Weaknesses: ${selectedStudent.commonMistakes.join(", ")}
+    
+    Format: "By [Date], when given [Condition], the student will [Action] with [Criteria] accuracy over [Consistency]."`;
 }
+
 
     try {
       const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
