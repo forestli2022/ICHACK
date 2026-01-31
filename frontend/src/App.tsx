@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 
 // --- Types & Constants ---
 type WordState = { 
+  id: string; 
   core: string; 
   punct: string; 
   color: string; 
@@ -10,10 +11,9 @@ type WordState = {
 
 const GREEN = '#2ecc71';
 const RED = '#e63946';
-const BLACK = '#000000';
-const CURRENT_BG = '#e8eaed'; // Light gray background for the active word
-
-const SEARCH_WINDOW = 2; // Reduced window size for safety
+const BLACK = '#1e293b';
+const CURRENT_BG = '#e8eaed'; 
+const SEARCH_WINDOW = 2; 
 
 // --- Levenshtein & Fuzzy Match ---
 const getLevenshteinDistance = (a: string, b: string): number => {
@@ -40,28 +40,27 @@ const getLevenshteinDistance = (a: string, b: string): number => {
 const isFuzzyMatch = (target: string, spoken: string): boolean => {
   const dist = getLevenshteinDistance(target, spoken);
   const len = Math.max(target.length, spoken.length);
-  if (len <= 3) return dist === 0;
-  if (len <= 6) return dist <= 1;
+  if (len <= 3) return dist === 0; 
+  if (len <= 5) return dist <= 1;
   return dist <= 2;
 };
 
-const normalize = (s: string) => s.replace(/[^\p{L}\p{N}']/gu, '').toLowerCase();
+const normalize = (s: string) => s.replace(/[^\p{L}\p{N}]/gu, '').toLowerCase();
 
 const splitWords = (text: string): WordState[] =>
-  text.split(/\s+/).filter(Boolean).map((w) => {
-    const m = w.match(/([^\.,!?;:]+)([.,!?;:]*)/);
+  text.split(/\s+/).filter(Boolean).map((w, index) => {
+    const m = w.match(/^([^\.,!?;:"'()]+)?([.,!?—;:"'()]*)$/);
     const core = m?.[1] ?? w;
     const punct = m?.[2] ?? '';
-    return { core, punct, color: BLACK, punctColor: BLACK };
+    return { id: `${index}-${core}`, core, punct, color: BLACK, punctColor: BLACK };
   });
 
 const App: React.FC = () => {
-  const sentence = "Once upon a time, there was a sweet little girl loved by everyone who met her—but most of all by her grandmother. The old woman adored her so much that she made her a small red velvet hood. It suited her perfectly, and from that day on, everyone called her Little Red Riding Hood.";
+  const sentence = "Once upon a time, there was a sweet little girl loved by everyone who met her — but most of all by her grandmother. The old woman adored her so much that she made her a small red velvet hood.";
   
   const [targetWords, setTargetWords] = useState<WordState[]>(() => splitWords(sentence));
-  
-  // Track the current active index for UI highlighting
   const [activeIndex, setActiveIndex] = useState(0);
+  const [lastHeard, setLastHeard] = useState('');
 
   const recognitionRef = useRef<any>(null);
   const resetTimeoutRef = useRef<number | null>(null);
@@ -81,6 +80,7 @@ const App: React.FC = () => {
   const resetSentence = () => {
     setTargetWords(splitWords(sentence));
     setActiveIndex(0);
+    setLastHeard('');
     if (resetTimeoutRef.current) clearTimeout(resetTimeoutRef.current);
   };
 
@@ -105,10 +105,14 @@ const App: React.FC = () => {
       const fullTranscript = Array.from(event.results)
         .map((r: any) => r[0].transcript)
         .join(' ');
+        
       const spokenWords = fullTranscript.split(/\s+/).filter((w) => w.length > 0);
+      
+      if (spokenWords.length > 0) {
+        setLastHeard(spokenWords[spokenWords.length - 1]);
+      }
 
       setTargetWords((prevTargetWords) => {
-        // 1. Reset everything to Black
         const nextState = prevTargetWords.map(w => ({ 
           ...w, 
           color: BLACK, 
@@ -117,15 +121,15 @@ const App: React.FC = () => {
         
         let tIndex = 0; 
 
-        // 2. Iterate through every word spoken by the user
         for (let sIndex = 0; sIndex < spokenWords.length; sIndex++) {
           if (tIndex >= nextState.length) break;
 
           const spokenWord = spokenWords[sIndex];
           const sNorm = normalize(spokenWord);
-          let matchIndex = -1;
 
-          // --- PRIORITY 1: Check the CURRENT word (Fuzzy Allowed) ---
+          if (!sNorm) continue; 
+
+          let matchIndex = -1;
           const currentTarget = nextState[tIndex];
           const tNorm = normalize(currentTarget.core);
           
@@ -133,14 +137,10 @@ const App: React.FC = () => {
             matchIndex = tIndex;
           } 
           else {
-            // --- PRIORITY 2: Check Lookahead (Strict Match Only) ---
-            // preventing accidental jumps due to fuzzy matching future words
             for (let offset = 1; offset <= SEARCH_WINDOW; offset++) {
               const candidateIdx = tIndex + offset;
               if (candidateIdx < nextState.length) {
                  const candidateNorm = normalize(nextState[candidateIdx].core);
-                 
-                 // STRICT CHECK: Must be exact match to trigger a skip
                  if (candidateNorm === sNorm) {
                    matchIndex = candidateIdx;
                    break; 
@@ -149,46 +149,24 @@ const App: React.FC = () => {
             }
           }
 
-          // --- Match Logic ---
           if (matchIndex !== -1) {
-             // Skipped words -> RED
              for (let i = tIndex; i < matchIndex; i++) {
                  nextState[i].color = RED;
                  nextState[i].punctColor = RED;
              }
-             // Matched word -> GREEN
              nextState[matchIndex].color = GREEN;
              nextState[matchIndex].punctColor = GREEN;
-
-             // Log Logic (Prevent spam)
-             const wasAlreadyGreen = prevTargetWords[matchIndex]?.color === GREEN;
-             if (!wasAlreadyGreen) {
-               if (sNorm !== normalize(nextState[matchIndex].core)) {
-                 console.log(`%c⚠️ Fuzzy Match: "${nextState[matchIndex].core}" ~ "${spokenWord}"`, 'color: #f1c40f;');
-               }
-             }
-
              tIndex = matchIndex + 1;
           } 
           else {
-             // --- Mismatch Logic ---
-             const expected = nextState[tIndex].core;
-             const wasAlreadyRed = prevTargetWords[tIndex]?.color === RED;
-
-             if (!wasAlreadyRed) {
-                console.log(`%c❌ Mismatch: Expected "${expected}" | Heard "${spokenWord}"`, 'color: #e63946;');
-             }
-
              nextState[tIndex].color = RED;
              nextState[tIndex].punctColor = RED; 
              tIndex++;
           }
         }
 
-        // Update the active index (for the gray background)
         setActiveIndex(tIndex);
 
-        // Auto-reset check
         if (tIndex >= nextState.length && !resetTimeoutRef.current) {
              handleAutoReset();
         }
@@ -197,13 +175,36 @@ const App: React.FC = () => {
       });
     };
 
-    recognition.onerror = (e: any) => {
-      setStatusMsg(`Error: ${e.error}`);
+    // --- FIX STARTS HERE ---
+    recognition.onerror = (event: any) => {
+      // "aborted" is expected when we act on the recognition (like resetting)
+      // "no-speech" happens if you are silent for a few seconds
+      if (event.error === 'aborted' || event.error === 'no-speech') {
+        return; 
+      }
+      
+      if (event.error === 'not-allowed') {
+        setListening(false);
+        setStatusMsg('Microphone access denied.');
+        return;
+      }
+
+      setStatusMsg(`Error: ${event.error}`);
     };
+    // --- FIX ENDS HERE ---
 
     recognition.onend = () => {
+      // Only restart if we are still supposed to be listening.
+      // We use a small timeout to prevent rapid-fire restart loops.
       if (listening) {
-        try { recognition.start(); } catch {}
+        setTimeout(() => {
+            try { 
+                // Check listening again in case it changed during the timeout
+                recognition.start(); 
+            } catch (err) {
+                // If it's already started, ignore.
+            }
+        }, 50); 
       }
     };
 
@@ -219,23 +220,29 @@ const App: React.FC = () => {
     if (resetTimeoutRef.current) return;
     resetTimeoutRef.current = window.setTimeout(() => {
       resetSentence();
+      // Aborting here clears the speech buffer so the next "Once upon..." isn't appended to the old one.
+      // This triggers 'onerror' -> 'aborted', which we now ignore.
       if (recognitionRef.current) recognitionRef.current.abort();
       resetTimeoutRef.current = null;
     }, 2000);
   };
 
   const stopListening = () => {
+    // 1. Update state first so onend knows not to restart
+    setListening(false); 
+    
     if (recognitionRef.current) {
       recognitionRef.current.stop();
       recognitionRef.current = null;
     }
-    setListening(false);
     setStatusMsg('Stopped');
   };
 
   useEffect(() => {
+    // Cleanup on unmount
     return () => {
-      if (recognitionRef.current) recognitionRef.current.stop();
+      setListening(false); // Ensure onend doesn't restart
+      if (recognitionRef.current) recognitionRef.current.abort();
       if (resetTimeoutRef.current) clearTimeout(resetTimeoutRef.current);
     };
   }, []);
@@ -260,16 +267,15 @@ const App: React.FC = () => {
 
       <p style={styles.sentence}>
         {targetWords.map((w, i) => (
-          <span key={i} style={styles.wordWrapper}>
+          <span key={w.id} style={styles.wordWrapper}>
             <span style={{ 
                 color: w.color,
-                // Add gray background to the CURRENT expected word
                 backgroundColor: i === activeIndex ? CURRENT_BG : 'transparent',
                 borderRadius: '4px',
-                padding: '2px 0',
-                
-                borderBottom: w.color === RED ? '2px solid #e63946' : 'none',
-                fontWeight: w.color !== BLACK ? 'bold' : 'normal'
+                padding: '2px 4px',
+                borderBottom: w.color === RED ? '2px solid #e63946' : '2px solid transparent',
+                fontWeight: w.color !== BLACK ? '600' : '400',
+                transition: 'background-color 0.2s, color 0.1s'
             }}>
                 {w.core}
             </span>
@@ -277,6 +283,10 @@ const App: React.FC = () => {
           </span>
         ))}
       </p>
+
+      <div style={styles.footer}>
+        Last heard: <span style={{color: '#2ecc71', fontWeight: 'bold'}}>{lastHeard || "..."}</span>
+      </div>
     </div>
   );
 };
@@ -289,8 +299,8 @@ const styles: Record<string, React.CSSProperties> = {
     flexDirection: 'column',
     justifyContent: 'center',
     alignItems: 'center',
-    background: '#f9fafb',
-    fontFamily: '"Helvetica Neue", Helvetica, Arial, sans-serif',
+    background: '#f8fafc',
+    fontFamily: '"Inter", "Helvetica Neue", Helvetica, Arial, sans-serif',
     padding: '3rem',
     boxSizing: 'border-box',
   },
@@ -301,33 +311,43 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: 'center',
     flexWrap: 'wrap',
   },
-  status: { color: '#7f8c8d', fontSize: '0.9rem', fontWeight: 500 },
+  status: { color: '#64748b', fontSize: '0.9rem', fontWeight: 500, marginLeft: 10 },
   btn: {
     padding: '0.6rem 1.2rem',
     borderRadius: 8,
-    border: '1px solid #e0e0e0',
+    border: '1px solid #cbd5e1',
     background: '#ffffff',
-    color: '#333',
+    color: '#0f172a',
     cursor: 'pointer',
     fontWeight: 600,
-    boxShadow: '0 2px 5px rgba(0,0,0,0.05)',
+    boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
     transition: 'all 0.2s ease'
   },
   sentence: {
     fontSize: '2rem',
-    lineHeight: 1.6,
+    lineHeight: 1.8,
     maxWidth: '900px',
     textAlign: 'left',
-    color: '#34495e',
-    padding: '2.5rem',
+    color: '#334155',
+    padding: '3rem',
     background: '#ffffff',
-    borderRadius: 16,
-    boxShadow: '0 10px 30px rgba(0,0,0,0.08)',
+    borderRadius: 24,
+    boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
   },
   wordWrapper: {
-    marginRight: '0.35em',
+    marginRight: '0.25em',
     display: 'inline-block',
   },
+  footer: {
+    marginTop: '2rem',
+    padding: '1rem',
+    background: '#0f172a',
+    color: '#94a3b8',
+    borderRadius: '8px',
+    fontSize: '0.9rem',
+    minWidth: '200px',
+    textAlign: 'center'
+  }
 };
 
 export default App;
