@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_BASE_URL = 'http://localhost:8000/api';
+const API_BASE_URL = 'http://localhost:8001/api';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -28,7 +28,7 @@ export const authAPI = {
   completeProfile: (userId) => api.post(`/auth/profile/complete/${userId}`),
   getAssessmentQuestions: () => api.get('/auth/assessment/questions'),
   submitAssessment: (userId, answers) => 
-    api.post('/auth/assessment/submit', { answers }, { params: { user_id: userId } }),
+    api.post('/auth/assessment/submit', answers, { params: { user_id: userId } }),
   getUser: (userId) => api.get(`/auth/users/${userId}`),
 };
 
@@ -45,6 +45,10 @@ export const quizAPI = {
     api.post('/quizzes/submit', answer, { params: { session_id: sessionId } }),
   completeSession: (sessionId) => 
     api.post(`/quizzes/${sessionId}/complete`),
+  getResults: (sessionId) => 
+    api.get(`/quizzes/${sessionId}/results`),
+  retakeQuiz: (sessionId) => 
+    api.post(`/quizzes/${sessionId}/retake`),
 };
 
 export const reportAPI = {

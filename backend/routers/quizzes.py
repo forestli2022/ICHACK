@@ -5,41 +5,40 @@ from datetime import datetime
 
 from database import get_db
 from models import User, ReadingSession, Quiz, QuizResponse, WordKnowledge
-from schemas import QuizQuestion, QuizAnswer, QuizResult, QuizBatch
+from schemas import QuizQuestion, QuizAnswer, QuizResult, QuizBatch, QuizSessionResult, QuizTypeAccuracy
 from ai_service import generate_quizzes
 
 router = APIRouter()
 
-@router.post("/generate", response_model=QuizBatch)
-def generate_quiz_endpoint(session_id: int, db: Session = Depends(get_db)):
-    """Generate quizzes for a reading session"""
-    session = db.query(ReadingSession).filter(ReadingSession.id == session_id).first()
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
-    
+def _build_quiz_batch(session: ReadingSession, db: Session) -> QuizBatch:
+    """Generate quizzes for a session, store them, and return the batch."""
     user = db.query(User).filter(User.id == session.user_id).first()
-    
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
     # Get user's recent performance
-    recent_responses = db.query(QuizResponse).filter(
+    recent_responses = db.query(QuizResponse, Quiz).join(
+        Quiz, Quiz.id == QuizResponse.quiz_id
+    ).filter(
         QuizResponse.user_id == session.user_id
     ).order_by(QuizResponse.answered_at.desc()).limit(20).all()
-    
+
     # Generate quizzes using AI
     quiz_data = generate_quizzes(
         story_content=session.story_content,
         reading_level=session.story_difficulty,
         user_age=user.age,
         recent_performance=[{
-            "correct": r.is_correct,
-            "question_type": db.query(Quiz).filter(Quiz.id == r.quiz_id).first().question_type
-        } for r in recent_responses]
+            "correct": response.is_correct,
+            "question_type": quiz.question_type
+        } for response, quiz in recent_responses]
     )
-    
+
     # Store quizzes in database
     quiz_questions = []
     for quiz_item in quiz_data:
         quiz = Quiz(
-            session_id=session_id,
+            session_id=session.id,
             question_type=quiz_item["type"],
             question_text=quiz_item["question"],
             correct_answer=quiz_item["answer"],
@@ -48,15 +47,24 @@ def generate_quiz_endpoint(session_id: int, db: Session = Depends(get_db)):
         db.add(quiz)
         db.commit()
         db.refresh(quiz)
-        
+
         quiz_questions.append(QuizQuestion(
             id=quiz.id,
             question_type=quiz.question_type,
             question_text=quiz.question_text,
             options=quiz.options
         ))
-    
-    return QuizBatch(session_id=session_id, questions=quiz_questions)
+
+    return QuizBatch(session_id=session.id, questions=quiz_questions)
+
+@router.post("/generate", response_model=QuizBatch)
+def generate_quiz_endpoint(session_id: int, db: Session = Depends(get_db)):
+    """Generate quizzes for a reading session"""
+    session = db.query(ReadingSession).filter(ReadingSession.id == session_id).first()
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    return _build_quiz_batch(session, db)
 
 @router.post("/submit", response_model=QuizResult)
 def submit_quiz_answer(
@@ -132,3 +140,73 @@ def complete_session(session_id: int, db: Session = Depends(get_db)):
     db.commit()
     
     return {"message": "Session completed successfully", "session_id": session_id}
+
+@router.get("/{session_id}/results", response_model=QuizSessionResult)
+def get_session_results(session_id: int, db: Session = Depends(get_db)):
+    """Get quiz results summary for a reading session"""
+    session = db.query(ReadingSession).filter(ReadingSession.id == session_id).first()
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    responses = db.query(QuizResponse).filter(
+        QuizResponse.session_id == session_id
+    ).all()
+
+    total_questions = len(responses)
+    correct_answers = len([r for r in responses if r.is_correct])
+    accuracy = (correct_answers / total_questions * 100) if total_questions > 0 else 0
+
+    quiz_ids = [r.quiz_id for r in responses]
+    quizzes = {}
+    if quiz_ids:
+        for quiz in db.query(Quiz).filter(Quiz.id.in_(quiz_ids)).all():
+            quizzes[quiz.id] = quiz
+
+    breakdown = {}
+    for response in responses:
+        quiz = quizzes.get(response.quiz_id)
+        if not quiz:
+            continue
+        q_type = quiz.question_type
+        if q_type not in breakdown:
+            breakdown[q_type] = {"correct": 0, "total": 0}
+        breakdown[q_type]["total"] += 1
+        if response.is_correct:
+            breakdown[q_type]["correct"] += 1
+
+    question_breakdown = [
+        QuizTypeAccuracy(
+            question_type=q_type,
+            correct=stats["correct"],
+            total=stats["total"],
+            accuracy=(stats["correct"] / stats["total"] * 100) if stats["total"] > 0 else 0
+        )
+        for q_type, stats in breakdown.items()
+    ]
+
+    return QuizSessionResult(
+        session_id=session_id,
+        total_questions=total_questions,
+        correct_answers=correct_answers,
+        accuracy=accuracy,
+        question_breakdown=question_breakdown
+    )
+
+@router.post("/{session_id}/retake", response_model=QuizBatch)
+def retake_quiz(session_id: int, db: Session = Depends(get_db)):
+    """Create a new session for the same story and generate a new quiz set."""
+    session = db.query(ReadingSession).filter(ReadingSession.id == session_id).first()
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    new_session = ReadingSession(
+        user_id=session.user_id,
+        story_content=session.story_content,
+        story_title=session.story_title,
+        story_difficulty=session.story_difficulty
+    )
+    db.add(new_session)
+    db.commit()
+    db.refresh(new_session)
+
+    return _build_quiz_batch(new_session, db)

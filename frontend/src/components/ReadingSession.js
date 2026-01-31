@@ -13,6 +13,8 @@ function ReadingSession({ userId, sessionId, setSessionId }) {
   const [feedback, setFeedback] = useState(null);
   const [score, setScore] = useState({ correct: 0, total: 0 });
   const [startTime, setStartTime] = useState(null);
+  const [sessionResults, setSessionResults] = useState(null);
+  const [resultsLoading, setResultsLoading] = useState(false);
 
   useEffect(() => {
     if (!sessionId) {
@@ -28,6 +30,7 @@ function ReadingSession({ userId, sessionId, setSessionId }) {
       const response = await storyAPI.generateStory(userId);
       setSessionId(response.data.session_id);
       setStory(response.data);
+      setSessionResults(null);
       setStage('story');
     } catch (error) {
       console.error('Error generating story:', error);
@@ -39,6 +42,7 @@ function ReadingSession({ userId, sessionId, setSessionId }) {
     try {
       const response = await storyAPI.getStory(sessionId);
       setStory(response.data);
+      setSessionResults(null);
       setStage('story');
     } catch (error) {
       console.error('Error loading story:', error);
@@ -52,6 +56,8 @@ function ReadingSession({ userId, sessionId, setSessionId }) {
       const response = await quizAPI.generateQuizzes(sessionId || story.session_id);
       setQuizzes(response.data.questions);
       setCurrentQuizIndex(0);
+      setScore({ correct: 0, total: 0 });
+      setSessionResults(null);
       setStage('quiz');
       setStartTime(Date.now());
     } catch (error) {
@@ -107,10 +113,15 @@ function ReadingSession({ userId, sessionId, setSessionId }) {
   const completeSession = async () => {
     try {
       await quizAPI.completeSession(sessionId || story.session_id);
+      setResultsLoading(true);
+      const results = await quizAPI.getResults(sessionId || story.session_id);
+      setSessionResults(results.data);
       setStage('complete');
     } catch (error) {
       console.error('Error completing session:', error);
       setStage('complete');
+    } finally {
+      setResultsLoading(false);
     }
   };
 
@@ -120,7 +131,26 @@ function ReadingSession({ userId, sessionId, setSessionId }) {
     setQuizzes([]);
     setCurrentQuizIndex(0);
     setScore({ correct: 0, total: 0 });
+    setSessionResults(null);
     generateNewStory();
+  };
+
+  const retakeQuiz = async () => {
+    setStage('loading');
+    try {
+      const response = await quizAPI.retakeQuiz(sessionId || story.session_id);
+      setSessionId(response.data.session_id);
+      setQuizzes(response.data.questions);
+      setCurrentQuizIndex(0);
+      setScore({ correct: 0, total: 0 });
+      setSessionResults(null);
+      setStartTime(Date.now());
+      setStage('quiz');
+    } catch (error) {
+      console.error('Error retaking quiz:', error);
+      alert('Failed to retake quiz');
+      setStage('complete');
+    }
   };
 
   if (stage === 'loading') {
@@ -237,7 +267,11 @@ function ReadingSession({ userId, sessionId, setSessionId }) {
   }
 
   if (stage === 'complete') {
-    const accuracy = score.total > 0 ? (score.correct / score.total * 100).toFixed(0) : 0;
+    const accuracy = sessionResults
+      ? sessionResults.accuracy.toFixed(0)
+      : (score.total > 0 ? (score.correct / score.total * 100).toFixed(0) : 0);
+    const correctCount = sessionResults ? sessionResults.correct_answers : score.correct;
+    const totalCount = sessionResults ? sessionResults.total_questions : score.total;
 
     return (
       <motion.div
@@ -247,13 +281,14 @@ function ReadingSession({ userId, sessionId, setSessionId }) {
       >
         <div className="card-content">
           <h1>🎉 Session Complete!</h1>
+          {resultsLoading && <p>Loading results...</p>}
           <div className="stat-grid">
             <div className="stat-card">
-              <div className="stat-value">{score.correct}</div>
+              <div className="stat-value">{correctCount}</div>
               <div className="stat-label">Correct</div>
             </div>
             <div className="stat-card">
-              <div className="stat-value">{score.total}</div>
+              <div className="stat-value">{totalCount}</div>
               <div className="stat-label">Total</div>
             </div>
             <div className="stat-card">
@@ -262,8 +297,22 @@ function ReadingSession({ userId, sessionId, setSessionId }) {
             </div>
           </div>
 
+          {sessionResults && sessionResults.question_breakdown.length > 0 && (
+            <div className="stat-grid" style={{ marginTop: '20px' }}>
+              {sessionResults.question_breakdown.map((item) => (
+                <div className="stat-card" key={item.question_type}>
+                  <div className="stat-value">{item.accuracy.toFixed(0)}%</div>
+                  <div className="stat-label">{item.question_type.replace('_', ' ')}</div>
+                </div>
+              ))}
+            </div>
+          )}
+
           <button className="button-primary" onClick={startNewSession}>
             Read Another Story
+          </button>
+          <button className="button-primary" onClick={retakeQuiz}>
+            Retake Quiz
           </button>
           <button className="button-secondary" onClick={() => navigate('/report')}>
             View Progress Report

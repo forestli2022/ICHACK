@@ -1,13 +1,14 @@
 import os
 from dotenv import load_dotenv
-import openai
+from openai import OpenAI
 from typing import List, Dict
 
 # Load environment variables from .env file
 load_dotenv()
 
 # Set OpenAI API key
-openai.api_key = os.getenv("OPENAI_API_KEY")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+client = OpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None
 
 def generate_story(reading_level: str, interests: List[str], age: int, known_words: List[str]) -> Dict:
     """
@@ -47,7 +48,9 @@ Story: [Your story here]
 """
 
     try:
-        response = openai.ChatCompletion.create(
+        if not client:
+            raise RuntimeError("OPENAI_API_KEY is not set")
+        response = client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
                 {"role": "system", "content": "You are a creative children's story writer who creates age-appropriate, engaging stories."},
@@ -132,7 +135,9 @@ Format your response as a JSON array. Example:
 """
 
     try:
-        response = openai.ChatCompletion.create(
+        if not client:
+            raise RuntimeError("OPENAI_API_KEY is not set")
+        response = client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
                 {"role": "system", "content": "You are an educational assessment creator for children. Create engaging, age-appropriate quiz questions. Always respond with valid JSON."},

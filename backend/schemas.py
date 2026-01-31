@@ -85,6 +85,19 @@ class QuizBatch(BaseModel):
     session_id: int
     questions: List[QuizQuestion]
 
+class QuizTypeAccuracy(BaseModel):
+    question_type: str
+    correct: int
+    total: int
+    accuracy: float
+
+class QuizSessionResult(BaseModel):
+    session_id: int
+    total_questions: int
+    correct_answers: int
+    accuracy: float
+    question_breakdown: List[QuizTypeAccuracy]
+
 # Report Schemas
 class WordProgress(BaseModel):
     word: str
