@@ -1,19 +1,29 @@
 <!DOCTYPE html>
-<html lang="en" class="bg-gray-50 text-gray-900">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Teacher Pro Dashboard</title>
+  <script>
+    // Essential for Tailwind CDN to recognize the 'dark' class
+    window.tailwindConfig = { darkMode: 'class' };
+  </script>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    /* Specific styles for colorblind accessibility */
+    .protanopia { filter: saturate(0.5) hue-rotate(-10deg); }
+    .deuteranopia { filter: saturate(0.5) hue-rotate(10deg); }
+    .tritanopia { filter: hue-rotate(180deg); }
+  </style>
 </head>
-<body class="min-h-screen">
+<body class="bg-gray-50 text-gray-900 dark:bg-gray-950 dark:text-gray-100 transition-colors duration-200">
 <div id="root"></div>
 
 <script type="text/babel">
-const { useState, useMemo } = React;
+const { useState, useMemo, useEffect } = React;
 
 const initialStudents = [
   { id: 1, name: "Alice Johnson", progress: 0.78, accuracy: 0.82, commonMistakes: ["th","sh","r"], wordsPracticed: 120, trend: 'up' },
@@ -25,21 +35,37 @@ const initialStudents = [
 ];
 
 function App() {
-  const [students, setStudents] = useState(initialStudents);
+  const [students] = useState(initialStudents);
   const [selectedId, setSelectedId] = useState(1);
-  const [viewMode, setViewMode] = useState('students'); // 'students' or 'groups'
+  const [viewMode, setViewMode] = useState('students');
   const [sortBy, setSortBy] = useState('name');
+  
+  // Accessibility State
+  const [darkMode, setDarkMode] = useState(false);
+  const [fontSize, setFontSize] = useState("16px");
+  const [colorblindMode, setColorblindMode] = useState("normal");
 
   const selectedStudent = students.find(s => s.id === selectedId);
 
-  // FEATURE 1: At-Risk Sorting
+  // Sync Dark Mode Class
+  useEffect(() => {
+    if (darkMode) document.documentElement.classList.add('dark');
+    else document.documentElement.classList.remove('dark');
+  }, [darkMode]);
+
+  // Sync Colorblind Class
+  useEffect(() => {
+    const body = document.body;
+    body.classList.remove('protanopia', 'deuteranopia', 'tritanopia');
+    if (colorblindMode !== 'normal') body.classList.add(colorblindMode);
+  }, [colorblindMode]);
+
   const sortedStudents = useMemo(() => {
     let list = [...students];
     if (sortBy === 'accuracy') return list.sort((a, b) => a.accuracy - b.accuracy);
     return list.sort((a, b) => a.name.localeCompare(b.name));
   }, [students, sortBy]);
 
-  // FEATURE 5: Group by Weakness
   const groups = useMemo(() => {
     const map = {};
     students.forEach(s => {
@@ -51,121 +77,125 @@ function App() {
     return map;
   }, [students]);
 
-  // FEATURE 4: Parent Report Generator
-  const copyParentReport = () => {
-    const report = `Hi! ${selectedStudent.name} is making progress. Current accuracy is ${Math.round(selectedStudent.accuracy*100)}%. We are focusing on: ${selectedStudent.commonMistakes.join(', ')}. Keep up the great work!`;
-    navigator.clipboard.writeText(report);
-    alert("Report copied to clipboard!");
-  };
-
   const getStatusColor = (acc) => {
     if (acc < 0.6) return "bg-red-500";
-    if (acc < 0.8) return "bg-yellow-500";
-    return "bg-green-500";
+    if (acc < 0.8) return "bg-amber-500";
+    return "bg-emerald-500";
   };
 
   return (
-    <div className="max-w-6xl mx-auto p-6 font-sans">
-      <header className="flex justify-between items-center mb-8 border-b pb-4">
+    <div style={{ fontSize }} className="max-w-6xl mx-auto p-4 md:p-8">
+      {/* HEADER WITH TOGGLES */}
+      <header className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4 border-b dark:border-gray-800 pb-6">
         <div>
-          <h1 className="text-3xl font-bold text-gray-800">Class Insight</h1>
-          <p className="text-gray-500 text-sm">Actionable data for focused teaching</p>
+          <h1 className="text-3xl font-black tracking-tight">Teacher Console</h1>
+          <p className="text-gray-500 dark:text-gray-400">Classroom Management & Phonics Triage</p>
         </div>
-        <div className="flex gap-2">
-          <button 
-            onClick={() => setViewMode('students')}
-            className={`px-4 py-2 rounded-lg ${viewMode === 'students' ? 'bg-blue-600 text-white' : 'bg-gray-200'}`}
-          >Individual</button>
-          <button 
-            onClick={() => setViewMode('groups')}
-            className={`px-4 py-2 rounded-lg ${viewMode === 'groups' ? 'bg-blue-600 text-white' : 'bg-gray-200'}`}
-          >Group Planner</button>
+        
+        <div className="flex flex-wrap items-center gap-4 bg-white dark:bg-gray-900 p-2 rounded-xl shadow-sm border dark:border-gray-800">
+           <div className="flex items-center gap-2 border-r pr-4 dark:border-gray-700">
+             <label className="text-xs font-bold uppercase text-gray-400">View</label>
+             <div className="flex bg-gray-100 dark:bg-gray-800 rounded-lg p-1">
+                <button onClick={() => setViewMode('students')} className={`px-3 py-1 text-xs rounded-md ${viewMode === 'students' ? 'bg-white dark:bg-gray-700 shadow-sm font-bold' : ''}`}>Individual</button>
+                <button onClick={() => setViewMode('groups')} className={`px-3 py-1 text-xs rounded-md ${viewMode === 'groups' ? 'bg-white dark:bg-gray-700 shadow-sm font-bold' : ''}`}>Groups</button>
+             </div>
+           </div>
+
+           <div className="flex items-center gap-2">
+             <button 
+                onClick={() => setDarkMode(!darkMode)}
+                className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors"
+                title="Toggle Dark Mode"
+             >
+               {darkMode ? '☀️' : '🌙'}
+             </button>
+           </div>
         </div>
       </header>
 
       <div className="grid grid-cols-1 md:grid-cols-12 gap-8">
-        {/* Sidebar / List */}
+        {/* SIDEBAR */}
         <aside className="md:col-span-4 lg:col-span-3">
-          <div className="mb-4 flex items-center justify-between text-xs font-bold text-gray-400 uppercase tracking-widest">
-            <span>Students</span>
-            <select className="bg-transparent" onChange={(e) => setSortBy(e.target.value)}>
-              <option value="name">Sort A-Z</option>
-              <option value="accuracy">Sort by Need</option>
+          <div className="mb-4 flex items-center justify-between text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">
+            <span>Active Roster</span>
+            <select className="bg-transparent outline-none cursor-pointer hover:text-blue-500" onChange={(e) => setSortBy(e.target.value)}>
+              <option value="name">Name A-Z</option>
+              <option value="accuracy">Priority</option>
             </select>
           </div>
-          <div className="space-y-2">
+          <div className="space-y-1">
             {sortedStudents.map(s => (
               <button 
                 key={s.id}
                 onClick={() => { setSelectedId(s.id); setViewMode('students'); }}
-                className={`w-full flex items-center p-3 rounded-xl border transition-all ${selectedId === s.id && viewMode === 'students' ? 'border-blue-500 bg-blue-50 shadow-sm' : 'border-gray-100 hover:bg-gray-50'}`}
+                className={`w-full flex items-center p-3 rounded-xl border-2 transition-all ${selectedId === s.id && viewMode === 'students' ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400' : 'border-transparent hover:bg-gray-100 dark:hover:bg-gray-900'}`}
               >
-                <div className={`w-3 h-3 rounded-full mr-3 ${getStatusColor(s.accuracy)}`}></div>
-                <span className="flex-1 text-left font-medium">{s.name}</span>
-                <span className="text-xs text-gray-400">{Math.round(s.accuracy*100)}%</span>
+                <div className={`w-2.5 h-2.5 rounded-full mr-3 ${getStatusColor(s.accuracy)} shadow-sm`}></div>
+                <span className="flex-1 text-left font-semibold">{s.name}</span>
               </button>
             ))}
           </div>
         </aside>
 
-        {/* Main Content Area */}
-        <main className="md:col-span-8 lg:col-span-9 bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+        {/* MAIN PANEL */}
+        <main className="md:col-span-8 lg:col-span-9 bg-white dark:bg-gray-900 p-6 md:p-10 rounded-3xl shadow-xl shadow-gray-200/50 dark:shadow-none border border-gray-100 dark:border-gray-800">
           {viewMode === 'students' ? (
             <div>
-              <div className="flex justify-between items-start mb-6">
-                <div>
-                  <h2 className="text-2xl font-bold">{selectedStudent.name}</h2>
-                  <div className="flex items-center gap-2 mt-1">
-                    {/* FEATURE 2: Trends */}
-                    <span className="text-sm font-medium text-gray-500">Last 5 Days:</span>
-                    <span className={`text-xs px-2 py-0.5 rounded-full font-bold flex items-center gap-1 ${
-                      selectedStudent.trend === 'up' ? 'bg-green-100 text-green-700' : 
-                      selectedStudent.trend === 'down' ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-700'
+               <div className="flex flex-col sm:flex-row justify-between gap-4 mb-10">
+                  <div>
+                    <h2 className="text-4xl font-bold mb-2">{selectedStudent.name}</h2>
+                    <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-bold ${
+                      selectedStudent.trend === 'up' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' : 
+                      selectedStudent.trend === 'down' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'
                     }`}>
-                      {selectedStudent.trend === 'up' ? '▲ Improving' : selectedStudent.trend === 'down' ? '▼ Declining' : '● Stable'}
+                      {selectedStudent.trend === 'up' ? '▲ IMPROVING' : selectedStudent.trend === 'down' ? '▼ DECLINING' : '● STABLE'}
                     </span>
                   </div>
-                </div>
-                <button onClick={copyParentReport} className="bg-gray-800 text-white px-4 py-2 rounded-lg text-sm hover:bg-gray-700">
-                  Copy Parent Update
-                </button>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-8">
-                <div className="p-4 bg-gray-50 rounded-xl">
-                  <p className="text-sm text-gray-500 mb-1">Accuracy Score</p>
-                  <p className="text-3xl font-bold">{Math.round(selectedStudent.accuracy*100)}%</p>
-                </div>
-                <div className="p-4 bg-gray-50 rounded-xl">
-                  <p className="text-sm text-gray-500 mb-1">Total Words</p>
-                  <p className="text-3xl font-bold">{selectedStudent.wordsPracticed}</p>
-                </div>
-              </div>
-
-              {/* FEATURE 3: Actionable Intervention */}
-              <h3 className="font-bold text-gray-800 mb-3">Intervention Needed</h3>
-              <div className="flex flex-wrap gap-2">
-                {selectedStudent.commonMistakes.map(mistake => (
-                  <button key={mistake} className="group relative flex items-center gap-2 px-4 py-2 bg-white border border-red-200 rounded-lg text-red-700 hover:bg-red-50 transition-colors">
-                    <span className="font-mono font-bold">/{mistake}/</span>
-                    <span className="text-xs font-semibold uppercase tracking-tighter">Assign Practice</span>
+                  <button onClick={() => alert("Report Copied!")} className="h-fit px-6 py-3 bg-gray-900 dark:bg-blue-600 text-white rounded-2xl font-bold text-sm hover:scale-105 transition-transform active:scale-95">
+                    Generate Parent Update
                   </button>
-                ))}
-              </div>
+               </div>
+
+               <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-10">
+                  <div className="p-6 border dark:border-gray-800 rounded-2xl">
+                    <p className="text-xs font-bold text-gray-400 uppercase mb-2">Accuracy</p>
+                    <p className="text-4xl font-black text-blue-600">{Math.round(selectedStudent.accuracy*100)}%</p>
+                  </div>
+                  <div className="p-6 border dark:border-gray-800 rounded-2xl">
+                    <p className="text-xs font-bold text-gray-400 uppercase mb-2">Progress</p>
+                    <div className="w-full bg-gray-100 dark:bg-gray-800 h-3 rounded-full overflow-hidden mt-4">
+                      <div className="bg-blue-500 h-full" style={{width: `${selectedStudent.progress*100}%`}}></div>
+                    </div>
+                  </div>
+                  <div className="p-6 border dark:border-gray-800 rounded-2xl">
+                    <p className="text-xs font-bold text-gray-400 uppercase mb-2">Total Practice</p>
+                    <p className="text-4xl font-black">{selectedStudent.wordsPracticed}</p>
+                  </div>
+               </div>
+
+               <h3 className="text-lg font-bold mb-4">Intervention Path</h3>
+               <div className="flex flex-wrap gap-3">
+                  {selectedStudent.commonMistakes.map(m => (
+                    <div key={m} className="flex items-center gap-3 pl-4 pr-2 py-2 bg-red-50 dark:bg-red-900/10 border border-red-100 dark:border-red-900/30 rounded-xl">
+                      <span className="font-mono font-bold text-red-600">/{m}/</span>
+                      <button className="bg-white dark:bg-gray-800 text-[10px] font-black px-3 py-1.5 rounded-lg shadow-sm hover:bg-red-600 hover:text-white transition-colors">ASSIGN</button>
+                    </div>
+                  ))}
+               </div>
             </div>
           ) : (
             <div>
-              <h2 className="text-2xl font-bold mb-6">Small Group Planner</h2>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <h2 className="text-3xl font-bold mb-8 italic text-gray-300">Group Planner</h2>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {Object.entries(groups).map(([sound, names]) => (
-                  <div key={sound} className="p-4 border border-gray-100 rounded-xl bg-blue-50/50">
-                    <div className="flex items-center justify-between mb-3">
-                      <h4 className="font-bold text-blue-800 text-lg uppercase font-mono">/{sound}/ Phonics</h4>
-                      <span className="bg-blue-200 text-blue-800 text-xs px-2 py-1 rounded-full">{names.length} Students</span>
+                  <div key={sound} className="p-6 bg-gray-50 dark:bg-gray-800/50 rounded-3xl border-2 border-dashed border-gray-200 dark:border-gray-700">
+                    <div className="flex justify-between items-center mb-4">
+                      <h4 className="text-2xl font-mono font-bold">/{sound}/</h4>
+                      <span className="text-xs font-bold bg-white dark:bg-gray-700 px-3 py-1 rounded-full border dark:border-gray-600">{names.length} Students</span>
                     </div>
-                    <ul className="space-y-1">
-                      {names.map(n => <li key={n} className="text-gray-700">• {n}</li>)}
-                    </ul>
+                    <div className="flex flex-wrap gap-2">
+                      {names.map(n => <span key={n} className="bg-white dark:bg-gray-900 px-3 py-1.5 rounded-lg text-sm font-medium border dark:border-gray-800">{n}</span>)}
+                    </div>
                   </div>
                 ))}
               </div>
@@ -173,6 +203,30 @@ function App() {
           )}
         </main>
       </div>
+
+      {/* ACCESSIBILITY FOOTER */}
+      <footer className="mt-12 pt-8 border-t dark:border-gray-800 flex flex-wrap items-center justify-between gap-6 opacity-60 hover:opacity-100 transition-opacity">
+        <div className="flex items-center gap-6">
+          <div className="flex items-center gap-3">
+            <label className="text-xs font-black uppercase tracking-tighter">Text Size</label>
+            <select value={fontSize} onChange={e => setFontSize(e.target.value)} className="bg-transparent font-bold">
+              <option value="14px">Small</option>
+              <option value="16px">Standard</option>
+              <option value="20px">Large</option>
+            </select>
+          </div>
+          <div className="flex items-center gap-3">
+            <label className="text-xs font-black uppercase tracking-tighter">Color Filter</label>
+            <select value={colorblindMode} onChange={e => setColorblindMode(e.target.value)} className="bg-transparent font-bold">
+              <option value="normal">None</option>
+              <option value="protanopia">Protanopia</option>
+              <option value="deuteranopia">Deuteranopia</option>
+              <option value="tritanopia">Tritanopia</option>
+            </select>
+          </div>
+        </div>
+        <p className="text-xs font-medium">Teacher Dashboard v2.4 • Accessibility Enabled</p>
+      </footer>
     </div>
   );
 }
