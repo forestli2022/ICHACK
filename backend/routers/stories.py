@@ -24,13 +24,19 @@ def generate_story_endpoint(request: StoryRequest, db: Session = Depends(get_db)
         WordKnowledge.user_id == request.user_id,
         WordKnowledge.familiarity_score > 0.7
     ).all()
+
+    focus_words = db.query(WordKnowledge).filter(
+        WordKnowledge.user_id == request.user_id,
+        WordKnowledge.familiarity_score < 0.4
+    ).order_by(WordKnowledge.familiarity_score.asc()).limit(8).all()
     
     # Generate story using AI
     story_data = generate_story(
         reading_level=difficulty,
         interests=user.interests,
         age=user.age,
-        known_words=[w.word for w in known_words]
+        known_words=[w.word for w in known_words],
+        focus_words=[w.word for w in focus_words]
     )
     
     # Create new reading session

@@ -98,6 +98,18 @@ class QuizSessionResult(BaseModel):
     accuracy: float
     question_breakdown: List[QuizTypeAccuracy]
 
+# Agent Schemas
+class AgentRunRequest(BaseModel):
+    user_id: int
+    difficulty: Optional[str] = None
+
+class AgentRunResponse(BaseModel):
+    session_id: int
+    title: str
+    content: str
+    difficulty: str
+    questions: List[QuizQuestion]
+
 # Report Schemas
 class WordProgress(BaseModel):
     word: str

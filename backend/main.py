@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 import uvicorn
 
 from database import engine, get_db, Base
-from routers import auth, stories, quizzes, reports, words
+from routers import auth, stories, quizzes, reports, words, agent
 
 # Create database tables
 Base.metadata.create_all(bind=engine)
@@ -26,6 +26,7 @@ app.include_router(stories.router, prefix="/api/stories", tags=["stories"])
 app.include_router(quizzes.router, prefix="/api/quizzes", tags=["quizzes"])
 app.include_router(reports.router, prefix="/api/reports", tags=["reports"])
 app.include_router(words.router, prefix="/api/words", tags=["word_difficulties"])
+app.include_router(agent.router, prefix="/api/agent", tags=["agent"])
 
 @app.get("/")
 def read_root():

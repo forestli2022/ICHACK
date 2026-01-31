@@ -1,7 +1,7 @@
 import os
 from dotenv import load_dotenv
 from openai import OpenAI
-from typing import List, Dict
+from typing import List, Dict, Optional
 
 # Load environment variables from .env file
 load_dotenv()
@@ -10,7 +10,13 @@ load_dotenv()
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 client = OpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None
 
-def generate_story(reading_level: str, interests: List[str], age: int, known_words: List[str]) -> Dict:
+def generate_story(
+    reading_level: str,
+    interests: List[str],
+    age: int,
+    known_words: List[str],
+    focus_words: Optional[List[str]] = None
+) -> Dict:
     """
     Generate a story using OpenAI GPT based on user's reading level and interests.
     
@@ -28,12 +34,22 @@ def generate_story(reading_level: str, interests: List[str], age: int, known_wor
     
     interests_str = ", ".join(interests) if interests else "animals and adventures"
     
+    focus_words = focus_words or []
+    focus_words_str = ", ".join(focus_words)
+
+    focus_requirement = (
+        f"- Include and naturally use these focus words: {focus_words_str}"
+        if focus_words
+        else "- No required focus words"
+    )
+
     prompt = f"""Write a children's story for a {age}-year-old child at a {reading_level} reading level.
 
 Requirements:
 - Word count: {word_count} words
 - Topics the child likes: {interests_str}
 - Reading level: {reading_level}
+- {focus_requirement}
 - Use simple, age-appropriate language
 - Include a clear beginning, middle, and end
 - Make it engaging and fun
