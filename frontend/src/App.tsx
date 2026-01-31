@@ -47,21 +47,47 @@ const isFuzzyMatch = (target: string, spoken: string): boolean => {
 
 const normalize = (s: string) => s.replace(/[^\p{L}\p{N}]/gu, '').toLowerCase();
 
-const splitWords = (text: string): WordState[] =>
-  text.split(/\s+/).filter(Boolean).map((w, index) => {
+// --- Split Words Logic ---
+const splitWords = (text: string): WordState[] => {
+  const tokens = text.split(/\s+/).filter(Boolean);
+  return tokens.reduce((acc: WordState[], w, index) => {
     const m = w.match(/^([^\.,!?;:"'()]+)?([.,!?—;:"'()]*)$/);
-    const core = m?.[1] ?? w;
-    const punct = m?.[2] ?? '';
-    return { id: `${index}-${core}`, core, punct, color: BLACK, punctColor: BLACK };
-  });
+    let core = m?.[1] ?? w;
+    let punct = m?.[2] ?? '';
+
+    if (normalize(core).length === 0) {
+      punct = w; 
+      core = "";
+    }
+
+    if (core) {
+      acc.push({ 
+        id: `${index}-${core}`, 
+        core, 
+        punct, 
+        color: BLACK, 
+        punctColor: BLACK 
+      });
+    } else if (acc.length > 0) {
+      acc[acc.length - 1].punct += ` ${punct}`; 
+    }
+    
+    return acc;
+  }, []);
+};
 
 const App: React.FC = () => {
-  const sentence = "Once upon a time, there was a sweet little girl loved by everyone who met her — but most of all by her grandmother. The old woman adored her so much that she made her a small red velvet hood.";
+  const sentence = "Once upon a time, there was a sweet little girl loved by everyone who met her - but most of all by her grandmother. The old woman adored her so much that she made her a small red velvet hood.";
   
   const [targetWords, setTargetWords] = useState<WordState[]>(() => splitWords(sentence));
-  const [activeIndex, setActiveIndex] = useState(0);
-  const [lastHeard, setLastHeard] = useState('');
+  
+  // FIX: Derived State. 
+  // The "active" word is simply the first word that hasn't been colored Green or Red yet.
+  // If findIndex returns -1 (all colored), we default to length (end of sentence).
+  const foundIndex = targetWords.findIndex(w => w.color === BLACK);
+  const activeIndex = foundIndex === -1 ? targetWords.length : foundIndex;
 
+  const [lastHeard, setLastHeard] = useState('');
   const recognitionRef = useRef<any>(null);
   const resetTimeoutRef = useRef<number | null>(null);
   const [listening, setListening] = useState(false);
@@ -79,7 +105,7 @@ const App: React.FC = () => {
 
   const resetSentence = () => {
     setTargetWords(splitWords(sentence));
-    setActiveIndex(0);
+    // No need to reset activeIndex manually anymore, it auto-calculates from the fresh BLACK words
     setLastHeard('');
     if (resetTimeoutRef.current) clearTimeout(resetTimeoutRef.current);
   };
@@ -165,7 +191,9 @@ const App: React.FC = () => {
           }
         }
 
-        setActiveIndex(tIndex);
+        // REMOVED: setActiveIndex(tIndex) 
+        // We do not set state inside a state setter. 
+        // activeIndex is now derived in the render function.
 
         if (tIndex >= nextState.length && !resetTimeoutRef.current) {
              handleAutoReset();
@@ -175,35 +203,20 @@ const App: React.FC = () => {
       });
     };
 
-    // --- FIX STARTS HERE ---
     recognition.onerror = (event: any) => {
-      // "aborted" is expected when we act on the recognition (like resetting)
-      // "no-speech" happens if you are silent for a few seconds
-      if (event.error === 'aborted' || event.error === 'no-speech') {
-        return; 
-      }
-      
+      if (event.error === 'aborted' || event.error === 'no-speech') return; 
       if (event.error === 'not-allowed') {
         setListening(false);
         setStatusMsg('Microphone access denied.');
         return;
       }
-
       setStatusMsg(`Error: ${event.error}`);
     };
-    // --- FIX ENDS HERE ---
 
     recognition.onend = () => {
-      // Only restart if we are still supposed to be listening.
-      // We use a small timeout to prevent rapid-fire restart loops.
       if (listening) {
         setTimeout(() => {
-            try { 
-                // Check listening again in case it changed during the timeout
-                recognition.start(); 
-            } catch (err) {
-                // If it's already started, ignore.
-            }
+            try { recognition.start(); } catch {}
         }, 50); 
       }
     };
@@ -220,17 +233,13 @@ const App: React.FC = () => {
     if (resetTimeoutRef.current) return;
     resetTimeoutRef.current = window.setTimeout(() => {
       resetSentence();
-      // Aborting here clears the speech buffer so the next "Once upon..." isn't appended to the old one.
-      // This triggers 'onerror' -> 'aborted', which we now ignore.
       if (recognitionRef.current) recognitionRef.current.abort();
       resetTimeoutRef.current = null;
     }, 2000);
   };
 
   const stopListening = () => {
-    // 1. Update state first so onend knows not to restart
     setListening(false); 
-    
     if (recognitionRef.current) {
       recognitionRef.current.stop();
       recognitionRef.current = null;
@@ -239,9 +248,8 @@ const App: React.FC = () => {
   };
 
   useEffect(() => {
-    // Cleanup on unmount
     return () => {
-      setListening(false); // Ensure onend doesn't restart
+      setListening(false);
       if (recognitionRef.current) recognitionRef.current.abort();
       if (resetTimeoutRef.current) clearTimeout(resetTimeoutRef.current);
     };
@@ -270,6 +278,7 @@ const App: React.FC = () => {
           <span key={w.id} style={styles.wordWrapper}>
             <span style={{ 
                 color: w.color,
+                // Use the DERIVED activeIndex here
                 backgroundColor: i === activeIndex ? CURRENT_BG : 'transparent',
                 borderRadius: '4px',
                 padding: '2px 4px',
