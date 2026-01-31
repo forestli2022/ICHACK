@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Teacher Pro Dashboard | Full Suite</title>
+  <title>Teacher Pro Dashboard | OpenRouter AI</title>
   <script>window.tailwindConfig = { darkMode: 'class' };</script>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
@@ -38,8 +38,9 @@ const initialStudents = [
 ];
 
 function App() {
-  const [step, setStep] = useState('auth'); // auth -> ai-setup -> dashboard
+  const [step, setStep] = useState('auth');
   const [apiKey, setApiKey] = useState(() => localStorage.getItem("teacher_ai_key") || "");
+  const [selectedModel, setSelectedModel] = useState("google/gemini-2.0-flash-001");
   const [students] = useState(initialStudents);
   const [selectedId, setSelectedId] = useState(1);
   const [searchQuery, setSearchQuery] = useState("");
@@ -56,26 +57,31 @@ function App() {
   useEffect(() => { document.documentElement.classList.toggle('dark', darkMode); }, [darkMode]);
 
   const callAI = async (sound) => {
-    if (!apiKey) return alert("AI features are currently disabled. Please add a key in settings.");
+    if (!apiKey) return alert("Please add your OpenRouter key in the login screen.");
     setIsGenerating(true);
     setAiResponse("");
     try {
-      const res = await fetch("https://api.openai.com/v1/chat/completions", {
+      const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
         method: "POST",
-        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
+        headers: { 
+          "Content-Type": "application/json", 
+          "Authorization": `Bearer ${apiKey}`,
+          "HTTP-Referer": window.location.href,
+          "X-Title": "Teacher Pro Dashboard"
+        },
         body: JSON.stringify({
-          model: "gpt-3.5-turbo",
+          model: selectedModel,
           messages: [
-            { role: "system", content: "You are an expert phonics coach." },
-            { role: "user", content: `5-minute activity for ${selectedStudent.name} struggling with /${sound}/.` }
+            { role: "system", content: "You are an expert phonics coach using Science of Reading principles." },
+            { role: "user", content: `Create a 5-minute multisensory activity for ${selectedStudent.name} struggling with /${sound}/.` }
           ]
         })
       });
       const data = await res.json();
-      if (data.error) throw new Error(data.error.message);
+      if (data.error) throw new Error(data.error.message || "OpenRouter Error");
       setAiResponse(data.choices[0].message.content);
     } catch (e) {
-      setAiResponse(`Error: ${e.message}`);
+      setAiResponse(`⚠️ Error: ${e.message}`);
     }
     setIsGenerating(false);
   };
@@ -84,7 +90,6 @@ function App() {
     setSelectedStudents(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
   };
 
-  // STEP 1: AUTHENTICATION
   if (step === 'auth') {
     return (
       <div className="min-h-screen flex items-center justify-center bg-blue-50 dark:bg-gray-950 p-6">
@@ -105,19 +110,18 @@ function App() {
     );
   }
 
-  // STEP 2: AI SETUP
   if (step === 'ai-setup') {
     return (
       <div className="min-h-screen flex items-center justify-center bg-blue-50 dark:bg-gray-950 p-6">
         <div className="bg-white dark:bg-gray-900 p-10 rounded-[2.5rem] shadow-2xl w-full max-w-md border dark:border-gray-800">
-          <h2 className="text-2xl font-black mb-4 flex items-center gap-2">✨ AI Configuration</h2>
-          <p className="text-sm text-gray-500 mb-6">Enhance your dashboard with generative lesson plans, or skip to view standard data.</p>
+          <h2 className="text-2xl font-black mb-4 flex items-center gap-2">🔗 OpenRouter Config</h2>
+          <p className="text-sm text-gray-500 mb-6 font-medium">Connect your OpenRouter key to unlock AI-powered interventions.</p>
           <div className="space-y-6">
             <div className="space-y-2">
-              <label className="text-[10px] font-black uppercase text-gray-400 px-1">OpenAI API Key</label>
+              <label className="text-[10px] font-black uppercase text-gray-400 px-1 tracking-widest">API Key</label>
               <input 
                 type="password" 
-                placeholder="sk-..." 
+                placeholder="sk-or-v1-..." 
                 value={apiKey} 
                 onChange={e => setApiKey(e.target.value)}
                 className="w-full bg-gray-50 dark:bg-gray-800 p-4 rounded-2xl border dark:border-gray-700 outline-none focus:ring-2 focus:ring-blue-500 transition-all"
@@ -125,10 +129,10 @@ function App() {
             </div>
             <div className="flex flex-col gap-3">
               <button onClick={() => setStep('dashboard')} className="w-full py-4 bg-blue-600 text-white rounded-2xl font-bold shadow-lg hover:bg-blue-700 transition-all">
-                Enable AI Features
+                Finish Setup
               </button>
               <button onClick={() => { setApiKey(""); setStep('dashboard'); }} className="w-full py-4 text-gray-400 font-bold hover:text-gray-600 transition-all">
-                Skip AI (Standard View)
+                Skip AI for now
               </button>
             </div>
           </div>
@@ -137,7 +141,6 @@ function App() {
     );
   }
 
-  // STEP 3: DASHBOARD
   return (
     <div style={{ fontSize }} className={`max-w-7xl mx-auto p-4 md:p-8 ${colorblindMode !== 'normal' ? colorblindMode : ''}`}>
       <nav className="no-print flex flex-wrap items-center justify-between gap-4 mb-8 bg-white dark:bg-gray-900 p-4 rounded-3xl border dark:border-gray-800 shadow-sm">
@@ -154,20 +157,19 @@ function App() {
             <option value="20px">Large Text</option>
           </select>
           <button onClick={() => setDarkMode(!darkMode)} className="p-2 bg-gray-100 dark:bg-gray-800 rounded-full">{darkMode ? '☀️' : '🌙'}</button>
-          <button onClick={() => {setApiKey(""); setStep('auth');}} className="text-[10px] font-black text-gray-400 hover:text-red-500 uppercase ml-4">Reset Session</button>
+          <button onClick={() => {setApiKey(""); setStep('auth');}} className="text-[10px] font-black text-gray-400 hover:text-red-500 uppercase ml-4">Reset Dashboard</button>
         </div>
         <button onClick={() => setStep('auth')} className="px-4 py-2 bg-red-50 dark:bg-red-900/20 text-red-600 font-black text-xs rounded-xl uppercase tracking-widest">Logout</button>
       </nav>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-        {/* SIDEBAR */}
         <aside className="no-print lg:col-span-3">
           <div className="bg-white dark:bg-gray-900 rounded-[2rem] p-6 border dark:border-gray-800 shadow-sm sticky top-8">
             <input type="text" placeholder="Search Roster..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="w-full bg-gray-50 dark:bg-gray-800 rounded-2xl px-4 py-3 text-sm mb-6 outline-none focus:ring-2 focus:ring-blue-500" />
             <div className="space-y-2 mb-6 max-h-[50vh] overflow-y-auto custom-scroll pr-2">
               {students.filter(s => s.name.toLowerCase().includes(searchQuery.toLowerCase())).map(s => (
                 <div key={s.id} className="flex items-center gap-3">
-                  <input type="checkbox" checked={selectedStudents.includes(s.id)} onChange={() => toggleSelection(s.id)} className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
+                  <input type="checkbox" checked={selectedStudents.includes(s.id)} onChange={() => toggleSelection(s.id)} className="w-4 h-4 rounded border-gray-300 text-blue-600" />
                   <button onClick={() => setSelectedId(s.id)} className={`flex-1 flex items-center p-2.5 rounded-xl text-sm font-bold transition-all ${selectedId === s.id ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-600' : 'hover:bg-gray-50 dark:hover:bg-gray-800'}`}>
                     <div className={`w-2 h-2 rounded-full mr-3 ${s.accuracy < 0.6 ? 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.5)]' : 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]'}`}></div>
                     <span className="truncate">{s.name}</span>
@@ -183,7 +185,6 @@ function App() {
           </div>
         </aside>
 
-        {/* MAIN PROFILE */}
         <main className="lg:col-span-9 space-y-8">
           <div className="bg-white dark:bg-gray-900 rounded-[2.5rem] p-8 md:p-12 border dark:border-gray-800 shadow-sm">
             <div className="flex flex-col md:flex-row justify-between items-start gap-6 mb-12">
@@ -198,12 +199,23 @@ function App() {
               <button onClick={() => window.print()} className="no-print px-8 py-4 bg-gray-900 dark:bg-blue-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:scale-105 transition-all shadow-xl">Print Report</button>
             </div>
 
-            {/* AI PANEL (ONLY IF KEY EXISTS) */}
             {apiKey ? (
               <div className="bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-gray-800 dark:to-gray-800 p-8 rounded-[2rem] border-2 border-blue-100 dark:border-blue-900/30 mb-10">
-                <div className="flex items-center gap-3 mb-6">
-                  <span className="text-2xl">✨</span>
-                  <h3 className="text-xl font-black italic">Lesson Co-Pilot</h3>
+                <div className="flex flex-wrap justify-between items-center gap-4 mb-6">
+                  <div className="flex items-center gap-3">
+                    <span className="text-2xl">✨</span>
+                    <h3 className="text-xl font-black italic">OpenRouter AI Co-Pilot</h3>
+                  </div>
+                  <select 
+                    value={selectedModel} 
+                    onChange={(e) => setSelectedModel(e.target.value)}
+                    className="bg-white dark:bg-gray-700 px-4 py-2 rounded-xl text-xs font-bold border dark:border-gray-600 outline-none"
+                  >
+                    <option value="google/gemini-2.0-flash-001">Gemini 2.0 (Fast)</option>
+                    <option value="anthropic/claude-3.5-sonnet">Claude 3.5 (Smart)</option>
+                    <option value="meta-llama/llama-3.1-8b-instruct">Llama 3.1 (Balanced)</option>
+                    <option value="openai/gpt-4o">GPT-4o (Pro)</option>
+                  </select>
                 </div>
                 <div className="flex flex-wrap gap-3 mb-8">
                   {selectedStudent.commonMistakes.map(m => (
@@ -212,7 +224,7 @@ function App() {
                     </button>
                   ))}
                 </div>
-                {isGenerating && <div className="text-blue-600 animate-pulse font-black uppercase text-[10px] tracking-widest">Calling Phonics Experts...</div>}
+                {isGenerating && <div className="text-blue-600 animate-pulse font-black uppercase text-[10px] tracking-widest">Consulting {selectedModel.split('/')[1]}...</div>}
                 {aiResponse && (
                   <div className="bg-white dark:bg-gray-900 p-8 rounded-2xl shadow-xl whitespace-pre-line text-sm border dark:border-gray-700 border-t-4 border-t-blue-500">
                     {aiResponse}
@@ -221,12 +233,10 @@ function App() {
               </div>
             ) : (
               <div className="p-8 border-2 border-dashed dark:border-gray-800 rounded-[2rem] text-center mb-10">
-                <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">AI Features Disabled</p>
-                <button onClick={() => setStep('ai-setup')} className="mt-2 text-blue-500 font-bold text-sm hover:underline">Add API Key to unlock interventions</button>
+                <button onClick={() => setStep('ai-setup')} className="text-blue-500 font-bold text-sm hover:underline">Add OpenRouter Key to unlock interventions</button>
               </div>
             )}
 
-            {/* SVG GROWTH CHART */}
             <div className="mb-12">
               <h4 className="text-[10px] font-black uppercase text-gray-400 mb-6 tracking-widest px-1">Accuracy Growth Trend</h4>
               <div className="bg-gray-50 dark:bg-gray-800/40 p-8 rounded-[2rem] border dark:border-gray-700">
@@ -249,7 +259,6 @@ function App() {
               </div>
             </div>
 
-            {/* QUICK STATS */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div className="p-8 border-2 dark:border-gray-800 rounded-[2rem]">
                 <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">Mastery Goal</p>
