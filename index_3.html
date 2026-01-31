@@ -35,7 +35,33 @@ const initialStudents = [
   { id: 3, name: "Clara Smith", progress: 0.91, accuracy: 0.88, target: 0.95, commonMistakes: ["r","l"], mastered: ["s", "a", "t", "p", "i", "n", "m", "d", "g", "o"], wordsPracticed: 150, history: [70, 75, 80, 85, 88] },
   { id: 4, name: "Daniel Wu", progress: 0.67, accuracy: 0.73, target: 0.80, commonMistakes: ["a","i"], mastered: ["s", "t", "p"], wordsPracticed: 110, history: [72, 74, 73, 72, 73] },
   { id: 5, name: "Eva Patel", progress: 0.82, accuracy: 0.90, target: 0.95, commonMistakes: ["th","s"], mastered: ["a", "n", "i", "p"], wordsPracticed: 140, history: [80, 82, 85, 87, 90] },
+  { id: 6, name: "Finn O'Malley", progress: 0.45, accuracy: 0.42, target: 0.80, commonMistakes: ["b","d"], mastered: ["s", "a", "t"], wordsPracticed: 60, history: [40, 45, 42, 38, 42] },
+  { id: 7, name: "Grace Lee", progress: 0.88, accuracy: 0.85, target: 0.90, commonMistakes: ["v","w"], mastered: ["s", "a", "t", "p", "i", "n", "m", "d", "g", "o", "c", "k"], wordsPracticed: 210, history: [60, 70, 75, 82, 85] },
+  { id: 8, name: "Henry Miller", progress: 0.30, accuracy: 0.28, target: 0.75, commonMistakes: ["short-e", "short-i"], mastered: ["m", "s"], wordsPracticed: 45, history: [35, 30, 25, 32, 28] },
+  { id: 9, name: "Isla Garcia", progress: 0.75, accuracy: 0.72, target: 0.85, commonMistakes: ["ng","nk"], mastered: ["s", "a", "t", "p", "i", "n"], wordsPracticed: 130, history: [50, 55, 62, 68, 72] },
+  { id: 10, name: "Jack Robinson", progress: 0.62, accuracy: 0.58, target: 0.85, commonMistakes: ["ck","k"], mastered: ["a", "p", "m", "s", "t"], wordsPracticed: 88, history: [50, 52, 55, 60, 58] },
+  { id: 11, name: "Kai Tanaka", progress: 0.95, accuracy: 0.94, target: 0.98, commonMistakes: ["wh"], mastered: ["s", "a", "t", "p", "i", "n", "m", "d", "g", "o", "c", "k", "e", "u", "r"], wordsPracticed: 300, history: [88, 90, 92, 95, 94] },
+  { id: 12, name: "Leo Brooks", progress: 0.52, accuracy: 0.48, target: 0.80, commonMistakes: ["f","v"], mastered: ["s", "a", "t", "p"], wordsPracticed: 72, history: [45, 48, 50, 47, 48] },
+  { id: 13, name: "Mia Velez", progress: 0.81, accuracy: 0.79, target: 0.90, commonMistakes: ["j","g"], mastered: ["s", "a", "t", "p", "i", "n", "m", "d"], wordsPracticed: 155, history: [65, 70, 72, 75, 79] },
+  { id: 14, name: "Noah Kim", progress: 0.40, accuracy: 0.35, target: 0.75, commonMistakes: ["p","b"], mastered: ["m", "a", "s"], wordsPracticed: 55, history: [30, 32, 38, 35, 35] },
+  { id: 15, name: "Olivia Chen", progress: 0.89, accuracy: 0.87, target: 0.95, commonMistakes: ["soft-c"], mastered: ["s", "a", "t", "p", "i", "n", "m", "d", "g", "o", "c", "k", "e", "u"], wordsPracticed: 240, history: [75, 80, 82, 85, 87] },
+  { id: 16, name: "Priya Das", progress: 0.70, accuracy: 0.68, target: 0.85, commonMistakes: ["ar","or"], mastered: ["s", "a", "t", "p", "i", "n"], wordsPracticed: 112, history: [58, 60, 65, 62, 68] },
+  { id: 17, name: "Quinn Foster", progress: 0.55, accuracy: 0.52, target: 0.80, commonMistakes: ["qu","k"], mastered: ["s", "a", "t", "p"], wordsPracticed: 90, history: [45, 48, 50, 52, 52] },
+  { id: 18, name: "Riley West", progress: 0.84, accuracy: 0.81, target: 0.92, commonMistakes: ["ee","ea"], mastered: ["s", "a", "t", "p", "i", "n", "m", "d", "g", "o"], wordsPracticed: 190, history: [70, 75, 78, 80, 81] },
+  { id: 19, name: "Sam Rivera", progress: 0.48, accuracy: 0.45, target: 0.80, commonMistakes: ["l-blends"], mastered: ["s", "a", "t", "p"], wordsPracticed: 65, history: [35, 40, 42, 45, 45] },
+  { id: 20, name: "Tara Singh", progress: 0.92, accuracy: 0.91, target: 0.95, commonMistakes: ["igh"], mastered: ["s", "a", "t", "p", "i", "n", "m", "d", "g", "o", "c", "k", "e", "u", "r", "l"], wordsPracticed: 275, history: [80, 85, 88, 90, 91] },
+  { id: 21, name: "Umar Khan", progress: 0.65, accuracy: 0.63, target: 0.85, commonMistakes: ["short-u", "short-o"], mastered: ["s", "a", "t", "p", "i", "n"], wordsPracticed: 105, history: [55, 58, 60, 62, 63] },
+  { id: 22, name: "Violet Adams", progress: 0.77, accuracy: 0.75, target: 0.88, commonMistakes: ["ai","ay"], mastered: ["s", "a", "t", "p", "i", "n", "m", "d"], wordsPracticed: 145, history: [65, 68, 70, 72, 75] },
+  { id: 23, name: "Will Henderson", progress: 0.35, accuracy: 0.32, target: 0.75, commonMistakes: ["w","wh"], mastered: ["m", "s", "t"], wordsPracticed: 50, history: [30, 28, 32, 30, 32] },
+  { id: 24, name: "Xander Reed", progress: 0.68, accuracy: 0.65, target: 0.80, commonMistakes: ["x","ks"], mastered: ["s", "a", "t", "p", "i", "n"], wordsPracticed: 115, history: [58, 62, 65, 63, 65] },
+  { id: 25, name: "Yara Ben-Ami", progress: 0.86, accuracy: 0.84, target: 0.90, commonMistakes: ["sh","ch"], mastered: ["s", "a", "t", "p", "i", "n", "m", "d", "g", "o"], wordsPracticed: 205, history: [72, 78, 80, 82, 84] },
+  { id: 26, name: "Zane Taylor", progress: 0.50, accuracy: 0.46, target: 0.80, commonMistakes: ["z","s"], mastered: ["s", "a", "t", "p"], wordsPracticed: 80, history: [40, 42, 45, 48, 46] },
+  { id: 27, name: "Amy Zhang", progress: 0.98, accuracy: 0.97, target: 0.99, commonMistakes: ["none"], mastered: ["all-kindergarten", "all-first-grade"], wordsPracticed: 450, history: [92, 94, 96, 97, 97] },
+  { id: 28, name: "Bobby Evans", progress: 0.25, accuracy: 0.20, target: 0.70, commonMistakes: ["all-vowels"], mastered: ["m"], wordsPracticed: 30, history: [25, 20, 18, 22, 20] },
+  { id: 29, name: "Carly Simon", progress: 0.73, accuracy: 0.70, target: 0.85, commonMistakes: ["oi","oy"], mastered: ["s", "a", "t", "p", "i", "n", "m", "d"], wordsPracticed: 125, history: [60, 62, 65, 68, 70] },
+  { id: 30, name: "David Miller", progress: 0.60, accuracy: 0.55, target: 0.80, commonMistakes: ["ending-s"], mastered: ["s", "a", "t", "p", "i", "n"], wordsPracticed: 95, history: [50, 52, 54, 56, 55] }
 ];
+
 
 function App() {
   const [step, setStep] = useState('auth');
@@ -215,6 +241,15 @@ function App() {
     );
   }
 
+  const rosterStats = useMemo(() => {
+    const total = students.length;
+    const urgent = students.filter(s => s.accuracy < 0.6).length;
+    const onTrack = students.filter(s => s.accuracy >= 0.8).length;
+    const avgAccuracy = Math.round((students.reduce((acc, s) => acc + s.accuracy, 0) / total) * 100);
+    
+    return { total, urgent, onTrack, avgAccuracy };
+  }, [students]);
+
   return (
     <div style={{ fontSize }} className={`max-w-7xl mx-auto p-4 md:p-8 ${colorblindMode !== 'normal' ? colorblindMode : ''}`}>
       <nav className="no-print flex flex-wrap items-center justify-between gap-4 mb-8 bg-white dark:bg-gray-900 p-4 rounded-3xl border dark:border-gray-800 shadow-sm">
@@ -238,6 +273,20 @@ function App() {
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
         <aside className="no-print lg:col-span-3">
+          <div className="grid grid-cols-2 gap-2 mb-6">
+            <div className="p-3 bg-red-50 dark:bg-red-900/20 rounded-2xl border border-red-100 dark:border-red-800">
+              <p className="text-[8px] font-black text-red-600 uppercase tracking-widest">Urgent Review</p>
+              <p className="text-xl font-black text-red-700 dark:text-red-400">{rosterStats.urgent}</p>
+            </div>
+            <div className="p-3 bg-emerald-50 dark:bg-emerald-900/20 rounded-2xl border border-emerald-100 dark:border-emerald-800">
+              <p className="text-[8px] font-black text-emerald-600 uppercase tracking-widest">On Track</p>
+              <p className="text-xl font-black text-emerald-700 dark:text-emerald-400">{rosterStats.onTrack}</p>
+            </div>
+            <div className="col-span-2 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-2xl border border-blue-100 dark:border-blue-800 flex justify-between items-center">
+              <p className="text-[8px] font-black text-blue-600 uppercase tracking-widest">Class Average</p>
+              <p className="text-sm font-black text-blue-700 dark:text-blue-400">{rosterStats.avgAccuracy}%</p>
+            </div>
+          </div>
           <div className="bg-white dark:bg-gray-900 rounded-[2rem] p-6 border dark:border-gray-800 shadow-sm sticky top-8">
             <input type="text" placeholder="Search students..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="w-full bg-gray-50 dark:bg-gray-800 rounded-2xl px-4 py-3 text-sm mb-6 outline-none focus:ring-2 focus:ring-blue-500" />
             <div className="space-y-2 mb-6 max-h-[50vh] overflow-y-auto custom-scroll pr-2">
