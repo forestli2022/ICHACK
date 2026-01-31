@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Neurodivergence Research Assistant</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <style>
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      margin: 0;
+      background: #f6f7f9;
+      color: #1f2937;
+      line-height: 1.5;
+    }
+
+    header {
+      background: #111827;
+      color: white;
+      padding: 2.5rem;
+    }
+
+    section {
+      max-width: 900px;
+      margin: auto;
+      padding: 2rem;
+    }
+
+    h1, h2 {
+      margin-top: 0;
+    }
+
+    .card {
+      background: white;
+      border-radius: 10px;
+      padding: 1.5rem;
+      margin-bottom: 2rem;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+    }
+
+    textarea {
+      width: 100%;
+      min-height: 120px;
+      padding: 0.75rem;
+      font-size: 1rem;
+      margin-top: 0.5rem;
+    }
+
+    button {
+      margin-top: 1rem;
+      padding: 0.6rem 1.2rem;
+      font-size: 1rem;
+      border: none;
+      border-radius: 6px;
+      background: #2563eb;
+      color: white;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background: #1d4ed8;
+    }
+
+    .result {
+      background: #eef2ff;
+      border-radius: 8px;
+      padding: 1.25rem;
+      margin-top: 1.5rem;
+    }
+
+    .paper {
+      margin-top: 1rem;
+      padding-top: 1rem;
+      border-top: 1px solid #c7d2fe;
+    }
+
+    footer {
+      text-align: center;
+      font-size: 0.9rem;
+      color: #6b7280;
+      padding: 2rem;
+    }
+  </style>
+</head>
+
+<body>
+
+<header>
+  <h1>Neurodivergence Research Assistant</h1>
+  <p>
+    Making academic research accessible to educators, clinicians,
+    caregivers, and advocacy organizations.
+  </p>
+</header>
+
+<section>
+  <div class="card">
+    <h2>Problem</h2>
+    <p>
+      Research on neurodivergence (ADHD, autism, dyslexia, etc.) is vast,
+      fragmented, and written primarily for academics.
+    </p>
+    <p>
+      Educators, charities, and support organizations often lack the time,
+      training, or access needed to extract actionable insights from
+      peer-reviewed literature.
+    </p>
+  </div>
+
+  <div class="card">
+    <h2>Solution</h2>
+    <p>
+      This tool acts as a <strong>research interpreter</strong>.
+      Users can ask practical questions in plain language and receive
+      evidence-based answers grounded in academic sources.
+    </p>
+    <p>
+      Each response is transparent, citing the papers used and clearly
+      separating evidence from interpretation.
+    </p>
+  </div>
+
+  <div class="card">
+    <h2>Ask a Research Question</h2>
+    <label for="question">
+      Example: “What classroom strategies help children with ADHD improve focus?”
+    </label>
+    <textarea id="question" placeholder="Type your question here..."></textarea>
+    <button type="button">Generate Evidence-Based Answer</button>
+
+    <div class="result">
+      <h3>Summary Answer</h3>
+      <p>
+        Research suggests that structured routines, short task segments,
+        and multimodal instruction significantly improve attention and task
+        completion for children with ADHD.
+      </p>
+
+      <h4>Supporting Evidence</h4>
+
+      <div class="paper">
+        <strong>Smith et al. (2019)</strong><br />
+        Found that breaking tasks into 10–15 minute intervals improved
+        sustained attention in primary school classrooms.
+      </div>
+
+      <div class="paper">
+        <strong>Jones & Patel (2021)</strong><br />
+        Demonstrated that visual schedules reduced cognitive load and
+        anxiety, indirectly improving focus.
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Why This Matters</h2>
+    <ul>
+      <li>Bridges the gap between academia and real-world practice</li>
+      <li>Supports inclusive education and accessibility</li>
+      <li>Reduces misinformation and oversimplification</li>
+      <li>Empowers non-academic stakeholders with evidence</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h2>Technical Approach</h2>
+    <ul>
+      <li>Curated academic paper dataset (pre-indexed)</li>
+      <li>Embedding-based semantic search (RAG)</li>
+      <li>Transparent citation of source material</li>
+      <li>Expandable knowledge base using trusted APIs</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h2>Feasibility & Scalability</h2>
+    <p>
+      The prototype uses a limited set of papers for speed and reliability.
+      The same architecture can scale to thousands of publications across
+      different neurodivergent conditions and languages.
+    </p>
+  </div>
+</section>
+
+<footer>
+  Hackathon Prototype · Social Impact & Accessibility
+</footer>
+
+</body>
+</html>
