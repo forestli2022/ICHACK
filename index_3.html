@@ -74,8 +74,8 @@ function App() {
   const [aiResponse, setAiResponse] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
   const [apiStatus, setApiStatus] = useState("idle"); 
-  const [rawNotes, setRawNotes] = useState(""); // MOVED INSIDE APP
-  const [copied, setCopied] = useState(false); // ADDED MISSING STATE
+  const [rawNotes, setRawNotes] = useState("");
+  const [copied, setCopied] = useState(false);
   
   const [darkMode, setDarkMode] = useState(false);
   const [fontSize, setFontSize] = useState("16px");
@@ -85,6 +85,15 @@ function App() {
 
   useEffect(() => { localStorage.setItem("teacher_ai_key", apiKey); }, [apiKey]);
   useEffect(() => { document.documentElement.classList.toggle('dark', darkMode); }, [darkMode]);
+
+  // MOVE HOOK ABOVE ANY CONDITIONAL RETURNS (fixes blank screen)
+  const rosterStats = useMemo(() => {
+    const total = students.length;
+    const urgent = students.filter(s => s.accuracy < 0.6).length;
+    const onTrack = students.filter(s => s.accuracy >= 0.8).length;
+    const avgAccuracy = Math.round((students.reduce((acc, s) => acc + s.accuracy, 0) / total) * 100);
+    return { total, urgent, onTrack, avgAccuracy };
+  }, [students]);
 
   const checkStatus = async () => {
     if (!apiKey) return alert("Enter a key first!");
@@ -120,39 +129,34 @@ function App() {
         prompt = `Write a warm, professional, jargon-free 3-sentence update for the parents of ${selectedStudent.name}. Mention they are working on /${val}/ and give one simple tip for home practice that doesn't require extra materials.`;
     } else if (type === 'heart') {
         prompt = `Identify 5 'Heart Words' (high-frequency irregular words) that align with ${selectedStudent.name}'s current level. Explain which part of the word must be 'learned by heart'.`;
-
     } else if (type === 'translate') {
-    prompt = `Translate these raw classroom observations into a professional, clinical progress report paragraph for ${selectedStudent.name}: "${val}" 
-    Guidelines: Use Science of Reading terminology (e.g., phonemic awareness, orthographic mapping, decoding). Stay objective and professional.`;
-
+      prompt = `Translate these raw classroom observations into a professional, clinical progress report paragraph for ${selectedStudent.name}: "${val}" 
+      Guidelines: Use Science of Reading terminology (e.g., phonemic awareness, orthographic mapping, decoding). Stay objective and professional.`;
     } else if (type === 'goal') {
-    prompt = `Write a SMART IEP goal for ${selectedStudent.name}. 
-    Current Accuracy: ${Math.round(selectedStudent.accuracy * 100)}%
-    Target Accuracy: ${Math.round(selectedStudent.target * 100)}%
-    Specific Weaknesses: ${selectedStudent.commonMistakes.join(", ")}
-    
-    Format: "By [Date], when given [Condition], the student will [Action] with [Criteria] accuracy over [Consistency]."`;
-
+      prompt = `Write a SMART IEP goal for ${selectedStudent.name}. 
+      Current Accuracy: ${Math.round(selectedStudent.accuracy * 100)}%
+      Target Accuracy: ${Math.round(selectedStudent.target * 100)}%
+      Specific Weaknesses: ${selectedStudent.commonMistakes.join(", ")}
+      
+      Format: "By [Date], when given [Condition], the student will [Action] with [Criteria] accuracy over [Consistency]."`;
     } else if (type === 'wordlist') {
-    prompt = `Generate a 'Strictly Decodable' practice set for ${selectedStudent.name}.
-    Target Sound: /${val}/
-    Allowed Mastered Sounds: ${selectedStudent.mastered.join(", ")}
-    
-    Provide:
-    1. A list of 10 words using ONLY the target sound and allowed sounds.
-    2. 3 short sentences using those words.
-    3. One 'Challenge Word'.
-    
-    If a word contains a sound NOT in the allowed list, do not use it.`;
-
+      prompt = `Generate a 'Strictly Decodable' practice set for ${selectedStudent.name}.
+      Target Sound: /${val}/
+      Allowed Mastered Sounds: ${selectedStudent.mastered.join(", ")}
+      
+      Provide:
+      1. A list of 10 words using ONLY the target sound and allowed sounds.
+      2. 3 short sentences using those words.
+      3. One 'Challenge Word'.
+      
+      If a word contains a sound NOT in the allowed list, do not use it.`;
     } else if (type === 'anchor') {
-    prompt = `Create a multisensory anchor mnemonic for the sound /${val}/. 
-    Include: 
-    1. A Visual Anchor (e.g., 'S looks like a Snake'). 
-    2. A Kinesthetic Gesture (e.g., 'Slither your hand in an S shape'). 
-    3. An Alliterative Catchphrase using only simple decodable words.`;
-}
-
+      prompt = `Create a multisensory anchor mnemonic for the sound /${val}/. 
+      Include: 
+      1. A Visual Anchor (e.g., 'S looks like a Snake'). 
+      2. A Kinesthetic Gesture (e.g., 'Slither your hand in an S shape'). 
+      3. An Alliterative Catchphrase using only simple decodable words.`;
+    }
 
     try {
       const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
@@ -171,7 +175,7 @@ function App() {
       });
       const data = await res.json();
       if (data.error) throw new Error(data.error.message);
-      setAiResponse(data.choices[0].message.content);
+      setAiResponse(data.choices?.[0]?.message?.content || "No response returned.");
     } catch (e) { 
       setAiResponse(`⚠️ Error: ${e.message}`); 
     }
@@ -240,15 +244,6 @@ function App() {
       </div>
     );
   }
-
-  const rosterStats = useMemo(() => {
-    const total = students.length;
-    const urgent = students.filter(s => s.accuracy < 0.6).length;
-    const onTrack = students.filter(s => s.accuracy >= 0.8).length;
-    const avgAccuracy = Math.round((students.reduce((acc, s) => acc + s.accuracy, 0) / total) * 100);
-    
-    return { total, urgent, onTrack, avgAccuracy };
-  }, [students]);
 
   if (step === 'dashboard') {
     return (
