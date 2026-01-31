@@ -94,7 +94,7 @@ function App() {
         prompt = `Write a warm, professional, jargon-free 3-sentence update for the parents of ${selectedStudent.name}. Mention they are working on /${val}/ and give one simple tip for home practice that doesn't require extra materials.`;
     } else if (type === 'heart') {
         prompt = `Identify 5 'Heart Words' (high-frequency irregular words) that align with ${selectedStudent.name}'s current level. Explain which part of the word must be 'learned by heart'.`;
-        
+
     } else if (type === 'translate') {
     prompt = `Translate these raw classroom observations into a professional, clinical progress report paragraph for ${selectedStudent.name}: "${val}" 
     Guidelines: Use Science of Reading terminology (e.g., phonemic awareness, orthographic mapping, decoding). Stay objective and professional.`;
@@ -310,6 +310,13 @@ function App() {
                       </button>
                       <button onClick={() => callAI('heart', m)} className="px-4 py-2 bg-amber-600 text-white rounded-xl font-black text-[9px] uppercase tracking-widest shadow-sm">
                         ❤️ Heart Words
+                      </button>
+                      <button 
+                        onClick={() => callAI('goal')} 
+                        disabled={isGenerating}
+                        className="px-4 py-2 bg-slate-900 text-white rounded-xl font-black text-[9px] uppercase tracking-widest shadow-sm hover:bg-black transition-all"
+                        >
+                        🎯 Draft SMART Goal
                       </button>
                     </div>
                     ))}
