@@ -13,7 +13,7 @@ const GREEN = '#2ecc71';
 const RED = '#e63946';
 const BLACK = '#1e293b';
 const CURRENT_BG = '#e8eaed'; 
-const SEARCH_WINDOW = 3; // Increased to 3 to make skipping easier if the cursor sticks
+const SEARCH_WINDOW = 3; 
 
 // --- Levenshtein & Fuzzy Match ---
 const getLevenshteinDistance = (a: string, b: string): number => {
@@ -81,13 +81,12 @@ const App: React.FC = () => {
   
   const [targetWords, setTargetWords] = useState<WordState[]>(() => splitWords(sentence));
   
-  // Derived state for cursor position
   const foundIndex = targetWords.findIndex(w => w.color === BLACK);
   const activeIndex = foundIndex === -1 ? targetWords.length : foundIndex;
+  const isFinished = activeIndex === targetWords.length;
 
   const [lastHeard, setLastHeard] = useState('');
   const recognitionRef = useRef<any>(null);
-  const resetTimeoutRef = useRef<number | null>(null);
   const [listening, setListening] = useState(false);
   const [supported, setSupported] = useState(true);
   const [statusMsg, setStatusMsg] = useState('Click "Start Reading" to begin');
@@ -120,7 +119,6 @@ const App: React.FC = () => {
 
     return () => {
       if (recognitionRef.current) recognitionRef.current.abort();
-      if (resetTimeoutRef.current) clearTimeout(resetTimeoutRef.current);
     };
   }, []);
 
@@ -155,12 +153,10 @@ const App: React.FC = () => {
           const currentTarget = nextState[tIndex];
           const tNorm = normalize(currentTarget.core);
           
-          // 1. Check Current Word
           if (isFuzzyMatch(tNorm, sNorm)) {
             matchIndex = tIndex;
           } 
           else {
-            // 2. Lookahead
             for (let offset = 1; offset <= SEARCH_WINDOW; offset++) {
               const candidateIdx = tIndex + offset;
               if (candidateIdx < nextState.length) {
@@ -174,7 +170,6 @@ const App: React.FC = () => {
           }
 
           if (matchIndex !== -1) {
-             // MATCH FOUND: Mark skipped words Red, Matched word Green, Advance Cursor
              for (let i = tIndex; i < matchIndex; i++) {
                  nextState[i].color = RED;
                  nextState[i].punctColor = RED;
@@ -184,19 +179,29 @@ const App: React.FC = () => {
              tIndex = matchIndex + 1;
           } 
           else {
-             // NO MATCH (Noise/Mistake):
-             // Mark the *current* word Red to indicate error, 
-             // BUT DO NOT ADVANCE THE CURSOR (tIndex).
-             // This lets the user retry the word immediately.
+             // Mismatch: Mark red, keep cursor sticky
              nextState[tIndex].color = RED;
              nextState[tIndex].punctColor = RED; 
-             
-             // REMOVED: tIndex++ 
           }
         }
 
-        if (tIndex >= nextState.length && !resetTimeoutRef.current) {
-             handleAutoReset();
+        // --- COMPLETION CHECK ---
+        if (tIndex >= nextState.length) {
+            // 1. Stop Listening
+            stopListening();
+            setStatusMsg('Finished!');
+
+            // 2. Log Missed Words
+            const missedWords = nextState
+                .filter(w => w.color === RED)
+                .map(w => w.core);
+            
+            console.log("--- SESSION FINISHED ---");
+            if (missedWords.length > 0) {
+                console.log("Missed/Red Words:", missedWords);
+            } else {
+                console.log("Perfect score! No missed words.");
+            }
         }
 
         return nextState;
@@ -214,7 +219,9 @@ const App: React.FC = () => {
   };
 
   const handleEnd = () => {
-    if (recognitionRef.current && statusMsg !== 'Stopped') {
+    // Only restart if we are NOT finished and the user didn't manually stop
+    // We check recognitionRef.current to see if we still want it alive.
+    if (recognitionRef.current && statusMsg === 'Listening...') {
          setTimeout(() => {
             try { recognitionRef.current.start(); } catch {}
         }, 50);
@@ -224,7 +231,7 @@ const App: React.FC = () => {
   };
 
   const startListening = () => {
-    if (!recognitionRef.current) return;
+    if (!recognitionRef.current || isFinished) return;
     try {
       recognitionRef.current.start();
       setStatusMsg('Starting...'); 
@@ -234,42 +241,26 @@ const App: React.FC = () => {
   };
 
   const stopListening = () => {
-    setStatusMsg('Stopped'); 
+    // We set statusMsg to something other than 'Listening...' 
+    // to signal handleEnd NOT to restart.
+    if (statusMsg === 'Listening...') {
+        setStatusMsg('Stopped'); 
+    }
+    
     setListening(false);
     if (recognitionRef.current) {
       recognitionRef.current.stop();
     }
   };
 
-  const resetSentence = () => {
-    if (recognitionRef.current) recognitionRef.current.abort(); 
-    setTargetWords(splitWords(sentence));
-    setLastHeard('');
-    if (resetTimeoutRef.current) {
-        clearTimeout(resetTimeoutRef.current);
-        resetTimeoutRef.current = null;
-    }
-  };
-
-  const handleAutoReset = () => {
-    if (resetTimeoutRef.current) return;
-    resetTimeoutRef.current = window.setTimeout(() => {
-      resetSentence();
-    }, 2000);
-  };
-
   return (
     <div style={styles.container}>
       <div style={styles.controls}>
-        <button onClick={startListening} disabled={!supported || listening} style={styles.btn}>
-          Start Reading
-        </button>
-        <button onClick={stopListening} disabled={!listening} style={styles.btn}>
-          Stop
-        </button>
-        <button onClick={resetSentence} style={styles.btn}>
-          Reset
-        </button>
+        {!isFinished && (
+            <button onClick={startListening} disabled={!supported || listening} style={styles.btn}>
+            Start Reading
+            </button>
+        )}
         <div style={styles.status}>{statusMsg}</div>
       </div>
 
