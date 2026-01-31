@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Teacher Pro Dashboard</title>
   <script>
-    // Essential for Tailwind CDN to recognize the 'dark' class
     window.tailwindConfig = { darkMode: 'class' };
   </script>
   <script src="https://cdn.tailwindcss.com"></script>
@@ -13,7 +12,6 @@
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <style>
-    /* Specific styles for colorblind accessibility */
     .protanopia { filter: saturate(0.5) hue-rotate(-10deg); }
     .deuteranopia { filter: saturate(0.5) hue-rotate(10deg); }
     .tritanopia { filter: hue-rotate(180deg); }
@@ -35,36 +33,44 @@ const initialStudents = [
 ];
 
 function App() {
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [lastLogin, setLastLogin] = useState(null);
   const [students] = useState(initialStudents);
   const [selectedId, setSelectedId] = useState(1);
   const [viewMode, setViewMode] = useState('students');
   const [sortBy, setSortBy] = useState('name');
+  const [searchQuery, setSearchQuery] = useState("");
   
-  // Accessibility State
   const [darkMode, setDarkMode] = useState(false);
   const [fontSize, setFontSize] = useState("16px");
   const [colorblindMode, setColorblindMode] = useState("normal");
 
   const selectedStudent = students.find(s => s.id === selectedId);
 
-  // Sync Dark Mode Class
   useEffect(() => {
     if (darkMode) document.documentElement.classList.add('dark');
     else document.documentElement.classList.remove('dark');
   }, [darkMode]);
 
-  // Sync Colorblind Class
   useEffect(() => {
     const body = document.body;
     body.classList.remove('protanopia', 'deuteranopia', 'tritanopia');
     if (colorblindMode !== 'normal') body.classList.add(colorblindMode);
   }, [colorblindMode]);
 
-  const sortedStudents = useMemo(() => {
-    let list = [...students];
+  const handleSignIn = () => {
+    const now = new Date();
+    setLastLogin(now.toLocaleString('en-US', { 
+      month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' 
+    }));
+    setIsLoggedIn(true);
+  };
+
+  const filteredAndSortedStudents = useMemo(() => {
+    let list = students.filter(s => s.name.toLowerCase().includes(searchQuery.toLowerCase()));
     if (sortBy === 'accuracy') return list.sort((a, b) => a.accuracy - b.accuracy);
     return list.sort((a, b) => a.name.localeCompare(b.name));
-  }, [students, sortBy]);
+  }, [students, sortBy, searchQuery]);
 
   const groups = useMemo(() => {
     const map = {};
@@ -83,39 +89,70 @@ function App() {
     return "bg-emerald-500";
   };
 
+  if (!isLoggedIn) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-6">
+        <div className="max-w-md w-full bg-white dark:bg-gray-900 p-8 rounded-3xl shadow-xl border dark:border-gray-800 text-center">
+          <div className="w-16 h-16 bg-blue-600 rounded-2xl mx-auto mb-6 flex items-center justify-center text-white text-3xl font-black italic shadow-lg shadow-blue-500/20">P</div>
+          <h2 className="text-3xl font-bold mb-2">Welcome Back</h2>
+          <p className="text-gray-500 dark:text-gray-400 mb-8">Sign in to manage your phonics class</p>
+          <div className="space-y-3">
+            <button onClick={handleSignIn} className="w-full py-3.5 bg-white dark:bg-gray-800 border-2 dark:border-gray-700 rounded-2xl font-bold flex items-center justify-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-750 transition-all border-b-4 active:border-b-2 active:translate-y-0.5">
+              <img src="https://upload.wikimedia.org/wikipedia/commons/5/53/Google_%22G%22_Logo.svg" className="w-5 h-5" />
+              Sign in with Google
+            </button>
+            <button onClick={handleSignIn} className="w-full py-3.5 bg-white dark:bg-gray-800 border-2 dark:border-gray-700 rounded-2xl font-bold flex items-center justify-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-750 transition-all border-b-4 active:border-b-2 active:translate-y-0.5">
+              <img src="https://upload.wikimedia.org/wikipedia/commons/4/44/Microsoft_logo.svg" className="w-5 h-5" />
+              Sign in with Microsoft
+            </button>
+            <div className="py-2 flex items-center gap-2 text-gray-400"><hr className="flex-1 dark:border-gray-800"/><span>OR</span><hr className="flex-1 dark:border-gray-800"/></div>
+            <button onClick={handleSignIn} className="w-full py-3.5 bg-blue-600 text-white rounded-2xl font-bold hover:bg-blue-700 transition-all shadow-lg shadow-blue-500/30">
+              Sign in with Email
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div style={{ fontSize }} className="max-w-6xl mx-auto p-4 md:p-8">
-      {/* HEADER WITH TOGGLES */}
       <header className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4 border-b dark:border-gray-800 pb-6">
         <div>
           <h1 className="text-3xl font-black tracking-tight">Teacher Console</h1>
-          <p className="text-gray-500 dark:text-gray-400">Classroom Management & Phonics Triage</p>
+          <div className="flex items-center gap-2 mt-1">
+            <p className="text-gray-500 dark:text-gray-400 text-sm">Classroom Management</p>
+            <span className="text-gray-300 dark:text-gray-700">•</span>
+            <p className="text-[10px] font-bold text-blue-500 uppercase tracking-widest">Last Session: {lastLogin}</p>
+          </div>
         </div>
         
-        <div className="flex flex-wrap items-center gap-4 bg-white dark:bg-gray-900 p-2 rounded-xl shadow-sm border dark:border-gray-800">
-           <div className="flex items-center gap-2 border-r pr-4 dark:border-gray-700">
-             <label className="text-xs font-bold uppercase text-gray-400">View</label>
-             <div className="flex bg-gray-100 dark:bg-gray-800 rounded-lg p-1">
-                <button onClick={() => setViewMode('students')} className={`px-3 py-1 text-xs rounded-md ${viewMode === 'students' ? 'bg-white dark:bg-gray-700 shadow-sm font-bold' : ''}`}>Individual</button>
-                <button onClick={() => setViewMode('groups')} className={`px-3 py-1 text-xs rounded-md ${viewMode === 'groups' ? 'bg-white dark:bg-gray-700 shadow-sm font-bold' : ''}`}>Groups</button>
-             </div>
+        <div className="flex flex-wrap items-center gap-3 bg-white dark:bg-gray-900 p-2 rounded-2xl shadow-sm border dark:border-gray-800">
+           <div className="flex bg-gray-100 dark:bg-gray-800 rounded-xl p-1">
+              <button onClick={() => setViewMode('students')} className={`px-4 py-1.5 text-xs rounded-lg transition-all ${viewMode === 'students' ? 'bg-white dark:bg-gray-700 shadow-sm font-bold' : 'text-gray-500'}`}>Individual</button>
+              <button onClick={() => setViewMode('groups')} className={`px-4 py-1.5 text-xs rounded-lg transition-all ${viewMode === 'groups' ? 'bg-white dark:bg-gray-700 shadow-sm font-bold' : 'text-gray-500'}`}>Groups</button>
            </div>
-
-           <div className="flex items-center gap-2">
-             <button 
-                onClick={() => setDarkMode(!darkMode)}
-                className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors"
-                title="Toggle Dark Mode"
-             >
-               {darkMode ? '☀️' : '🌙'}
-             </button>
-           </div>
+           <div className="h-6 w-px bg-gray-200 dark:bg-gray-700 mx-1"></div>
+           <button onClick={() => setDarkMode(!darkMode)} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors">
+             {darkMode ? '☀️' : '🌙'}
+           </button>
+           <button onClick={() => setIsLoggedIn(false)} className="ml-2 px-4 py-2 text-xs font-bold text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl transition-colors">
+             Sign Out
+           </button>
         </div>
       </header>
 
       <div className="grid grid-cols-1 md:grid-cols-12 gap-8">
-        {/* SIDEBAR */}
         <aside className="md:col-span-4 lg:col-span-3">
+          <div className="mb-4">
+            <input 
+              type="text" 
+              placeholder="Search students..." 
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full bg-white dark:bg-gray-900 border dark:border-gray-800 rounded-xl px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+            />
+          </div>
           <div className="mb-4 flex items-center justify-between text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">
             <span>Active Roster</span>
             <select className="bg-transparent outline-none cursor-pointer hover:text-blue-500" onChange={(e) => setSortBy(e.target.value)}>
@@ -124,20 +161,17 @@ function App() {
             </select>
           </div>
           <div className="space-y-1">
-            {sortedStudents.map(s => (
-              <button 
-                key={s.id}
-                onClick={() => { setSelectedId(s.id); setViewMode('students'); }}
-                className={`w-full flex items-center p-3 rounded-xl border-2 transition-all ${selectedId === s.id && viewMode === 'students' ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400' : 'border-transparent hover:bg-gray-100 dark:hover:bg-gray-900'}`}
-              >
-                <div className={`w-2.5 h-2.5 rounded-full mr-3 ${getStatusColor(s.accuracy)} shadow-sm`}></div>
+            {filteredAndSortedStudents.map(s => (
+              <button key={s.id} onClick={() => { setSelectedId(s.id); setViewMode('students'); }}
+                className={`w-full flex items-center p-3 rounded-xl border-2 transition-all ${selectedId === s.id && viewMode === 'students' ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400' : 'border-transparent hover:bg-gray-100 dark:hover:bg-gray-900'}`}>
+                <div className={`w-2.5 h-2.5 rounded-full mr-3 ${getStatusColor(s.accuracy)}`}></div>
                 <span className="flex-1 text-left font-semibold">{s.name}</span>
               </button>
             ))}
+            {filteredAndSortedStudents.length === 0 && <p className="text-xs text-center text-gray-500 py-4">No students found.</p>}
           </div>
         </aside>
 
-        {/* MAIN PANEL */}
         <main className="md:col-span-8 lg:col-span-9 bg-white dark:bg-gray-900 p-6 md:p-10 rounded-3xl shadow-xl shadow-gray-200/50 dark:shadow-none border border-gray-100 dark:border-gray-800">
           {viewMode === 'students' ? (
             <div>
@@ -155,7 +189,6 @@ function App() {
                     Generate Parent Update
                   </button>
                </div>
-
                <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-10">
                   <div className="p-6 border dark:border-gray-800 rounded-2xl">
                     <p className="text-xs font-bold text-gray-400 uppercase mb-2">Accuracy</p>
@@ -172,7 +205,6 @@ function App() {
                     <p className="text-4xl font-black">{selectedStudent.wordsPracticed}</p>
                   </div>
                </div>
-
                <h3 className="text-lg font-bold mb-4">Intervention Path</h3>
                <div className="flex flex-wrap gap-3">
                   {selectedStudent.commonMistakes.map(m => (
@@ -204,7 +236,6 @@ function App() {
         </main>
       </div>
 
-      {/* ACCESSIBILITY FOOTER */}
       <footer className="mt-12 pt-8 border-t dark:border-gray-800 flex flex-wrap items-center justify-between gap-6 opacity-60 hover:opacity-100 transition-opacity">
         <div className="flex items-center gap-6">
           <div className="flex items-center gap-3">
@@ -225,7 +256,6 @@ function App() {
             </select>
           </div>
         </div>
-        <p className="text-xs font-medium">Teacher Dashboard v2.4 • Accessibility Enabled</p>
       </footer>
     </div>
   );
