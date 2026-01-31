@@ -106,6 +106,18 @@ function App() {
     Specific Weaknesses: ${selectedStudent.commonMistakes.join(", ")}
     
     Format: "By [Date], when given [Condition], the student will [Action] with [Criteria] accuracy over [Consistency]."`;
+
+    } else if (type === 'wordlist') {
+    prompt = `Generate a 'Strictly Decodable' practice set for ${selectedStudent.name}.
+    Target Sound: /${val}/
+    Allowed Mastered Sounds: ${selectedStudent.mastered.join(", ")}
+    
+    Provide:
+    1. A list of 10 words using ONLY the target sound and allowed sounds.
+    2. 3 short sentences using those words.
+    3. One 'Challenge Word'.
+    
+    If a word contains a sound NOT in the allowed list, do not use it.`;
 }
 
 
@@ -290,8 +302,8 @@ function App() {
                     </button>
                   </div>
                   <select value={selectedModel} onChange={(e) => setSelectedModel(e.target.value)} className="bg-white dark:bg-gray-700 px-4 py-2 rounded-xl text-xs font-bold border dark:border-gray-600">
-                    <option value="google/gemini-2.0-flash-001">Gemini 2.0 (Fast)</option>
-                    <option value="openai/gpt-4o-mini">GPT-4o Mini</option>
+                    <option value="google/gemini-2.0-flash-001">Gemini 2.0 (Fastest)</option>
+                    <option value="openai/gpt-4o-mini">GPT-4o Mini (Recommended)</option>
                   </select>
                 </div>
                 
@@ -299,18 +311,23 @@ function App() {
                    <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest">Intervention Tools:</p>
                    {selectedStudent.commonMistakes.map(m => (
                     <div key={m} className="flex flex-wrap gap-2">
+
                       <button onClick={() => callAI('lesson', m)} disabled={isGenerating} className="px-5 py-2.5 bg-white dark:bg-gray-700 rounded-xl font-black text-[9px] uppercase tracking-widest shadow-sm border border-blue-200">
                         Lesson: /{m}/
                       </button>
+
                       <button onClick={() => callAI('story', m)} disabled={isGenerating} className="px-5 py-2.5 bg-indigo-600 text-white rounded-xl font-black text-[9px] uppercase tracking-widest shadow-sm">
                         Story: /{m}/
                       </button>
+
                       <button onClick={() => callAI('parent', m)} className="px-4 py-2 bg-emerald-600 text-white rounded-xl font-black text-[9px] uppercase tracking-widest shadow-sm">
                         📩 Parent Update
                       </button>
+
                       <button onClick={() => callAI('heart', m)} className="px-4 py-2 bg-amber-600 text-white rounded-xl font-black text-[9px] uppercase tracking-widest shadow-sm">
                         ❤️ Heart Words
                       </button>
+
                       <button 
                         onClick={() => callAI('goal')} 
                         disabled={isGenerating}
@@ -318,6 +335,11 @@ function App() {
                         >
                         🎯 Draft SMART Goal
                       </button>
+
+                      <button onClick={() => callAI('wordlist', m)} disabled={isGenerating} className="px-5 py-2.5 bg-purple-600 text-white rounded-xl font-black text-[9px] uppercase tracking-widest shadow-sm">
+                        📚 Word List: /{m}/
+                      </button>
+
                     </div>
                     ))}
                   </div>
