@@ -80,9 +80,19 @@ function App() {
     setIsGenerating(true);
     setAiResponse("");
     
-    const prompt = type === 'lesson' 
-      ? `Provide a short multisensory activity for ${selectedStudent.name} on the /${val}/ sound.`
-      : `Write a 4-sentence decodable story for ${selectedStudent.name}. ONLY use the mastered sounds: ${selectedStudent.mastered.join(", ")} AND the new target sound /${val}/. Keep it simple for a beginner reader.`;
+    let prompt = "";
+    if (type === 'lesson') {
+        prompt = `Design a 5-minute multisensory activity for ${selectedStudent.name} focusing on the /${val}/ sound. Include one tactile element.`;
+    } else if (type === 'story') {
+        prompt = `Write a short decodable story (max 50 words) for ${selectedStudent.name}. Use these mastered sounds: [${selectedStudent.mastered.join(", ")}] and include the target sound /${val}/.`;
+    } else if (type === 'group') {
+        const studentNames = students.filter(s => selectedStudents.includes(s.id)).map(s => s.name).join(", ");
+        prompt = `Create a collaborative small-group phonics game for these students: ${studentNames}. The game should allow them to practice different target sounds simultaneously.`;
+    } else if (type === 'parent') {
+        prompt = `Write a warm, professional, jargon-free 3-sentence update for the parents of ${selectedStudent.name}. Mention they are working on /${val}/ and give one simple tip for home practice that doesn't require extra materials.`;
+    } else if (type === 'heart') {
+        prompt = `Identify 5 'Heart Words' (high-frequency irregular words) that align with ${selectedStudent.name}'s current level. Explain which part of the word must be 'learned by heart'.`;
+    }
 
     try {
       const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
@@ -94,19 +104,26 @@ function App() {
         body: JSON.stringify({
           model: selectedModel,
           messages: [
-            { role: "system", content: "You are an expert phonics coach specializing in the Science of Reading." },
+            { role: "system", content: "You are an expert literacy interventionist specializing in the Science of Reading." },
             { role: "user", content: prompt }
           ]
         })
       });
-      
       const data = await res.json();
-      if (data.error) throw new Error(data.error.message || "API Error");
+      if (data.error) throw new Error(data.error.message);
       setAiResponse(data.choices[0].message.content);
-    } catch (e) {
-      setAiResponse(`⚠️ Error: ${e.message}. Check your key or browser console.`);
+    } catch (e) { 
+      setAiResponse(`⚠️ Error: ${e.message}`); 
     }
     setIsGenerating(false);
+  };
+
+  const copyToClipboard = () => {
+    if (!aiResponse) return;
+    navigator.clipboard.writeText(aiResponse).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
   };
 
   const toggleSelection = (id) => {
@@ -176,8 +193,8 @@ function App() {
           </select>
           <select value={fontSize} onChange={e => setFontSize(e.target.value)} className="bg-gray-100 dark:bg-gray-800 rounded-xl px-3 py-1.5 text-xs font-bold border-none">
             <option value="14px">Small</option>
-            <option value="16px">Normal</option>
-            <option value="20px">Large</option>
+            <option value="20px">Normal</option>
+            <option value="28px">Large</option>
           </select>
           <button onClick={() => setDarkMode(!darkMode)} className="p-2 bg-gray-100 dark:bg-gray-800 rounded-full">{darkMode ? '☀️' : '🌙'}</button>
           <button onClick={() => {setApiKey(""); setStep('auth');}} className="text-[10px] font-black text-gray-400 hover:text-red-500 uppercase ml-4 tracking-tighter">Reset Session</button>
@@ -245,15 +262,18 @@ function App() {
                    <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest">Select Intervention Strategy:</p>
                    {selectedStudent.commonMistakes.map(m => (
                     <div key={m} className="flex flex-wrap gap-2">
-                       <button onClick={() => callAI('lesson', m)} disabled={isGenerating} className="px-5 py-2.5 bg-white dark:bg-gray-700 rounded-xl font-black text-[9px] uppercase tracking-widest shadow-sm hover:shadow-md transition-all disabled:opacity-50 border border-blue-200 dark:border-gray-600">
-                         Create /{m}/ Activity
-                       </button>
-                       <button onClick={() => callAI('story', m)} disabled={isGenerating} className="px-5 py-2.5 bg-indigo-600 text-white rounded-xl font-black text-[9px] uppercase tracking-widest shadow-sm hover:shadow-md transition-all disabled:opacity-50">
-                         Generate /{m}/ Story
-                       </button>
+                      <button onClick={() => callAI('lesson', m)} disabled={isGenerating} className="px-5 py-2.5 bg-white dark:bg-gray-700 rounded-xl font-black text-[9px] uppercase tracking-widest shadow-sm hover:shadow-md transition-all disabled:opacity-50 border border-blue-200 dark:border-gray-600">
+                        Create /{m}/ Activity
+                      </button>
+                      <button onClick={() => callAI('story', m)} disabled={isGenerating} className="px-5 py-2.5 bg-indigo-600 text-white rounded-xl font-black text-[9px] uppercase tracking-widest shadow-sm hover:shadow-md transition-all disabled:opacity-50">
+                        Generate /{m}/ Story
+                      </button>
+                      <button onClick={() => callAI('parent', m)} className="px-4 py-2 bg-emerald-600 text-white rounded-xl font-black text-[9px] uppercase tracking-widest shadow-sm">
+                        📩 Parent Update
+                      </button>
                     </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
 
                 {isGenerating && <div className="mt-6 text-blue-600 animate-pulse font-black uppercase text-[10px] tracking-widest">Consulting {selectedModel.split('/')[1]}...</div>}
                 {aiResponse && (
