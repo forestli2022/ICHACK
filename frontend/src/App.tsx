@@ -13,7 +13,7 @@ const GREEN = '#2ecc71';
 const RED = '#e63946';
 const BLACK = '#1e293b';
 const CURRENT_BG = '#e8eaed'; 
-const SEARCH_WINDOW = 2; 
+const SEARCH_WINDOW = 3; // Increased to 3 to make skipping easier if the cursor sticks
 
 // --- Levenshtein & Fuzzy Match ---
 const getLevenshteinDistance = (a: string, b: string): number => {
@@ -81,9 +81,7 @@ const App: React.FC = () => {
   
   const [targetWords, setTargetWords] = useState<WordState[]>(() => splitWords(sentence));
   
-  // FIX: Derived State. 
-  // The "active" word is simply the first word that hasn't been colored Green or Red yet.
-  // If findIndex returns -1 (all colored), we default to length (end of sentence).
+  // Derived state for cursor position
   const foundIndex = targetWords.findIndex(w => w.color === BLACK);
   const activeIndex = foundIndex === -1 ? targetWords.length : foundIndex;
 
@@ -97,37 +95,36 @@ const App: React.FC = () => {
   useEffect(() => {
     const SpeechRecognition =
       (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    
     if (!SpeechRecognition) {
       setSupported(false);
       setStatusMsg('SpeechRecognition not supported in this browser.');
+      return;
     }
-  }, []);
-
-  const resetSentence = () => {
-    setTargetWords(splitWords(sentence));
-    // No need to reset activeIndex manually anymore, it auto-calculates from the fresh BLACK words
-    setLastHeard('');
-    if (resetTimeoutRef.current) clearTimeout(resetTimeoutRef.current);
-  };
-
-  const startListening = () => {
-    const SpeechRecognition =
-      (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SpeechRecognition) return;
-    if (recognitionRef.current) return;
 
     const recognition = new SpeechRecognition();
     recognition.continuous = true;
     recognition.interimResults = true;
     recognition.lang = 'en-US';
     recognition.maxAlternatives = 1;
+    
+    recognitionRef.current = recognition;
 
+    recognition.onresult = handleResult;
+    recognition.onerror = handleError;
+    recognition.onend = handleEnd;
     recognition.onstart = () => {
-      setListening(true);
-      setStatusMsg('Listening...');
+        setListening(true);
+        setStatusMsg('Listening...');
     };
 
-    recognition.onresult = (event: any) => {
+    return () => {
+      if (recognitionRef.current) recognitionRef.current.abort();
+      if (resetTimeoutRef.current) clearTimeout(resetTimeoutRef.current);
+    };
+  }, []);
+
+  const handleResult = (event: any) => {
       const fullTranscript = Array.from(event.results)
         .map((r: any) => r[0].transcript)
         .join(' ');
@@ -152,17 +149,18 @@ const App: React.FC = () => {
 
           const spokenWord = spokenWords[sIndex];
           const sNorm = normalize(spokenWord);
-
           if (!sNorm) continue; 
 
           let matchIndex = -1;
           const currentTarget = nextState[tIndex];
           const tNorm = normalize(currentTarget.core);
           
+          // 1. Check Current Word
           if (isFuzzyMatch(tNorm, sNorm)) {
             matchIndex = tIndex;
           } 
           else {
+            // 2. Lookahead
             for (let offset = 1; offset <= SEARCH_WINDOW; offset++) {
               const candidateIdx = tIndex + offset;
               if (candidateIdx < nextState.length) {
@@ -176,6 +174,7 @@ const App: React.FC = () => {
           }
 
           if (matchIndex !== -1) {
+             // MATCH FOUND: Mark skipped words Red, Matched word Green, Advance Cursor
              for (let i = tIndex; i < matchIndex; i++) {
                  nextState[i].color = RED;
                  nextState[i].punctColor = RED;
@@ -185,15 +184,16 @@ const App: React.FC = () => {
              tIndex = matchIndex + 1;
           } 
           else {
+             // NO MATCH (Noise/Mistake):
+             // Mark the *current* word Red to indicate error, 
+             // BUT DO NOT ADVANCE THE CURSOR (tIndex).
+             // This lets the user retry the word immediately.
              nextState[tIndex].color = RED;
              nextState[tIndex].punctColor = RED; 
-             tIndex++;
+             
+             // REMOVED: tIndex++ 
           }
         }
-
-        // REMOVED: setActiveIndex(tIndex) 
-        // We do not set state inside a state setter. 
-        // activeIndex is now derived in the render function.
 
         if (tIndex >= nextState.length && !resetTimeoutRef.current) {
              handleAutoReset();
@@ -201,31 +201,53 @@ const App: React.FC = () => {
 
         return nextState;
       });
-    };
+  };
 
-    recognition.onerror = (event: any) => {
-      if (event.error === 'aborted' || event.error === 'no-speech') return; 
-      if (event.error === 'not-allowed') {
+  const handleError = (event: any) => {
+    if (event.error === 'aborted' || event.error === 'no-speech') return; 
+    if (event.error === 'not-allowed') {
+      setListening(false);
+      setStatusMsg('Microphone access denied.');
+      return;
+    }
+    setStatusMsg(`Error: ${event.error}`);
+  };
+
+  const handleEnd = () => {
+    if (recognitionRef.current && statusMsg !== 'Stopped') {
+         setTimeout(() => {
+            try { recognitionRef.current.start(); } catch {}
+        }, 50);
+    } else {
         setListening(false);
-        setStatusMsg('Microphone access denied.');
-        return;
-      }
-      setStatusMsg(`Error: ${event.error}`);
-    };
+    }
+  };
 
-    recognition.onend = () => {
-      if (listening) {
-        setTimeout(() => {
-            try { recognition.start(); } catch {}
-        }, 50); 
-      }
-    };
-
+  const startListening = () => {
+    if (!recognitionRef.current) return;
     try {
-      recognition.start();
-      recognitionRef.current = recognition;
+      recognitionRef.current.start();
+      setStatusMsg('Starting...'); 
     } catch (err) {
-      console.error(err);
+      console.log("Already started or error:", err);
+    }
+  };
+
+  const stopListening = () => {
+    setStatusMsg('Stopped'); 
+    setListening(false);
+    if (recognitionRef.current) {
+      recognitionRef.current.stop();
+    }
+  };
+
+  const resetSentence = () => {
+    if (recognitionRef.current) recognitionRef.current.abort(); 
+    setTargetWords(splitWords(sentence));
+    setLastHeard('');
+    if (resetTimeoutRef.current) {
+        clearTimeout(resetTimeoutRef.current);
+        resetTimeoutRef.current = null;
     }
   };
 
@@ -233,27 +255,8 @@ const App: React.FC = () => {
     if (resetTimeoutRef.current) return;
     resetTimeoutRef.current = window.setTimeout(() => {
       resetSentence();
-      if (recognitionRef.current) recognitionRef.current.abort();
-      resetTimeoutRef.current = null;
     }, 2000);
   };
-
-  const stopListening = () => {
-    setListening(false); 
-    if (recognitionRef.current) {
-      recognitionRef.current.stop();
-      recognitionRef.current = null;
-    }
-    setStatusMsg('Stopped');
-  };
-
-  useEffect(() => {
-    return () => {
-      setListening(false);
-      if (recognitionRef.current) recognitionRef.current.abort();
-      if (resetTimeoutRef.current) clearTimeout(resetTimeoutRef.current);
-    };
-  }, []);
 
   return (
     <div style={styles.container}>
@@ -264,10 +267,7 @@ const App: React.FC = () => {
         <button onClick={stopListening} disabled={!listening} style={styles.btn}>
           Stop
         </button>
-        <button onClick={() => {
-            if(recognitionRef.current) recognitionRef.current.abort();
-            resetSentence();
-        }} style={styles.btn}>
+        <button onClick={resetSentence} style={styles.btn}>
           Reset
         </button>
         <div style={styles.status}>{statusMsg}</div>
@@ -278,7 +278,6 @@ const App: React.FC = () => {
           <span key={w.id} style={styles.wordWrapper}>
             <span style={{ 
                 color: w.color,
-                // Use the DERIVED activeIndex here
                 backgroundColor: i === activeIndex ? CURRENT_BG : 'transparent',
                 borderRadius: '4px',
                 padding: '2px 4px',
