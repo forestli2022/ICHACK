@@ -150,6 +150,7 @@ const TextFollower: React.FC<TextFollowerProps> = ({ text }) => {
       let tIndex = 0;
 
       for (let sIndex = 0; sIndex < spokenWords.length; sIndex++) {
+        // If we ran out of target words, stop processing
         if (tIndex >= nextState.length) break;
 
         const spokenWord = spokenWords[sIndex];
@@ -160,9 +161,11 @@ const TextFollower: React.FC<TextFollowerProps> = ({ text }) => {
         const currentTarget = nextState[tIndex];
         const tNorm = normalize(currentTarget.core);
 
+        // 1. Direct Match (Current Word)
         if (isFuzzyMatch(tNorm, sNorm)) {
           matchIndex = tIndex;
         } else {
+          // 2. Lookahead (Did they skip a word?)
           for (let offset = 1; offset <= SEARCH_WINDOW; offset++) {
             const candidateIdx = tIndex + offset;
             if (candidateIdx < nextState.length) {
@@ -176,19 +179,28 @@ const TextFollower: React.FC<TextFollowerProps> = ({ text }) => {
         }
 
         if (matchIndex !== -1) {
+          // Matched somewhere!
+          // Mark skipped words as RED
           for (let i = tIndex; i < matchIndex; i++) {
             nextState[i].color = RED;
             nextState[i].punctColor = RED;
           }
+          // Mark found word as GREEN
           nextState[matchIndex].color = GREEN;
           nextState[matchIndex].punctColor = GREEN;
+          
+          // Advance pointer past the matched word
           tIndex = matchIndex + 1;
         } else {
+          // 3. No Match Found (The Fix)
+          // Mark current word RED and move to the next word
           nextState[tIndex].color = RED;
           nextState[tIndex].punctColor = RED;
+          tIndex++; 
         }
       }
 
+      // Check for finish condition
       if (tIndex >= nextState.length) {
         stopListening();
         setStatusMsg('Finished!');
@@ -218,6 +230,7 @@ const TextFollower: React.FC<TextFollowerProps> = ({ text }) => {
   };
 
   const handleEnd = () => {
+    // Auto-restart if it stopped unexpectedly while "Listening..."
     if (recognitionRef.current && statusMsg === 'Listening...') {
       setTimeout(() => {
         try {
