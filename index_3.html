@@ -217,7 +217,7 @@ const testElevenLabs = async () => {
   if (!elevenKey) return alert("Please add an ElevenLabs Key first");
   
   try {
-    const response = await fetch("https://api.elevenlabs.io/v2/voices", {
+    const response = await fetch("https://api.elevenlabs.io/v1/voices", {
       headers: { "xi-api-key": elevenKey.trim() }
     });
     
@@ -279,12 +279,8 @@ const speakWithElevenLabs = async (text) => {
       throw new Error("No voices available on your account");
     }
     
-    // Use the first available voice
-    const voiceId = voicesData.voices[0].voice_id;
-    console.log("Using voice:", voicesData.voices[0].name, voiceId);
-    
     // Now synthesize speech
-    const response = await fetch(`https://api.elevenlabs.io/v2/text-to-speech/${voiceId}`, {
+    const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/kC1WIuSSgwH2T8iOV4iJ`, {
       method: 'POST',
       headers: {
         'Accept': 'audio/mpeg',
