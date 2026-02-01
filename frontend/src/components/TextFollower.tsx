@@ -13,7 +13,14 @@ const GREEN = '#2ecc71';
 const RED = '#e63946';
 const BLACK = '#1e293b';
 const CURRENT_BG = '#e8eaed';
-const SEARCH_WINDOW = 3;
+const SEARCH_WINDOW = 2;
+
+// Words to ignore (connectors, articles, etc)
+const BLACKLIST_WORDS = new Set([
+  'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for',
+  'of', 'is', 'are', 'was', 'were', 'be', 'by', 'with', 'from', 'as',
+  'it', 'that', 'this', 'these', 'those', 'i', 'you', 'he', 'she', 'we', 'they'
+]);
 
 // --- Levenshtein & Fuzzy Match ---
 const getLevenshteinDistance = (a: string, b: string): number => {
@@ -37,24 +44,26 @@ const getLevenshteinDistance = (a: string, b: string): number => {
   return matrix[b.length][a.length];
 };
 
-const isFuzzyMatch = (target: string, spoken: string): { matches: boolean; distance: number } => {
+const isFuzzyMatch = (target: string, spoken: string): boolean => {
   const dist = getLevenshteinDistance(target, spoken);
   const len = Math.max(target.length, spoken.length);
-  let matches = false;
-  if (len <= 3) matches = dist === 0;
-  else if (len <= 5) matches = dist <= 1;
-  else matches = dist <= 2;
-  return { matches, distance: dist };
+  if (len <= 3) return dist === 0;
+  if (len <= 5) return dist <= 1;
+  return dist <= 2;
 };
 
-const getConfidenceColor = (distance: number, wordLength: number): string => {
-  if (distance === 0) return GREEN; // Perfect match
-  if (distance === 1 && wordLength > 3) return '#52c785'; // Very close (light green)
-  if (distance === 2 && wordLength > 5) return '#7ec997'; // Close enough (lighter green)
-  return RED; // Too far
+const getConfidenceScore = (target: string, spoken: string): number => {
+  const dist = getLevenshteinDistance(target, spoken);
+  const len = Math.max(target.length, spoken.length);
+  // Return score from 0 to 1 (1 = perfect match)
+  if (len === 0) return 1;
+  return Math.max(0, 1 - (dist / len));
 };
 
-const normalize = (s: string) => s.replace(/[^\p{L}\p{N}]/gu, '').toLowerCase();
+const normalize = (s: string) => {
+  if (!s) return '';
+  return s.replace(/[^\p{L}\p{N}]/gu, '').toLowerCase();
+};
 
 // --- Split Words Logic ---
 const splitWords = (text: string): WordState[] => {
@@ -89,6 +98,46 @@ const splitWords = (text: string): WordState[] => {
 export type TextFollowerProps = {
   text: string;
   onComplete?: (missedWords: string[]) => void;
+};
+
+// Call AI agent to analyze word confidence and get likely missed words
+const callAIForWordAnalysis = async (wordConfidenceList: any[], missedWords: string[]): Promise<string[]> => {
+  try {
+    console.log('🤖 Calling AI to analyze word confidence...');
+    console.log('Word list:', wordConfidenceList);
+    const response = await fetch('http://localhost:8000/api/quizzes/analyze-pronunciation', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        word_list: wordConfidenceList,
+        missed_words: missedWords,
+      }),
+    });
+    
+    if (!response.ok) throw new Error('AI analysis failed');
+    const data = await response.json();
+    console.log('✅ AI analysis result:', data.analyzed_words);
+    return data.analyzed_words || missedWords;
+  } catch (error) {
+    console.error('❌ Error calling AI for word analysis:', error);
+    return missedWords; // Fallback to original list
+  }
+};
+
+// Text-to-Speech helper
+const speakWord = (word: string) => {
+  try {
+    const utterance = new SpeechSynthesisUtterance(word);
+    utterance.lang = 'en-US';
+    utterance.rate = 0.9;
+    utterance.pitch = 1;
+    window.speechSynthesis.cancel();
+    window.speechSynthesis.speak(utterance);
+  } catch (error) {
+    console.error('Error speaking word:', error);
+  }
 };
 
 const TextFollower: React.FC<TextFollowerProps> = ({ text = '', onComplete }) => {
@@ -137,6 +186,15 @@ const TextFollower: React.FC<TextFollowerProps> = ({ text = '', onComplete }) =>
     setTargetWords(splitWords(text));
   }, [text]);
 
+  // Auto-speak when entering practice mode or moving to next word
+  useEffect(() => {
+    if (practiceMode && currentPracticeIndex < practiceWords.length && !listening) {
+      setTimeout(() => {
+        speakWord(practiceWords[currentPracticeIndex]);
+      }, 500);
+    }
+  }, [practiceMode, currentPracticeIndex, practiceWords, listening]);
+
   const handleResult = useCallback((event: any) => {
     const fullTranscript = Array.from(event.results)
       .map((r: any) => r[0].transcript)
@@ -152,9 +210,15 @@ const TextFollower: React.FC<TextFollowerProps> = ({ text = '', onComplete }) =>
     if (practiceMode && practiceWords.length > 0 && currentPracticeIndex < practiceWords.length) {
       const targetWord = practiceWords[currentPracticeIndex];
       const lastSpoken = spokenWords[spokenWords.length - 1];
-      const fuzzyResult = isFuzzyMatch(normalize(targetWord), normalize(lastSpoken));
       
-      if (fuzzyResult.matches && fuzzyResult.distance === 0) {
+      // Safety check for undefined values
+      if (!targetWord || !lastSpoken) {
+        return;
+      }
+      
+      const isMatch = isFuzzyMatch(normalize(targetWord), normalize(lastSpoken));
+      
+      if (isMatch) {
         // Correct pronunciation
         setPracticeResult('correct');
         isListeningRef.current = false;
@@ -192,6 +256,7 @@ const TextFollower: React.FC<TextFollowerProps> = ({ text = '', onComplete }) =>
       let tIndex = 0;
 
       for (let sIndex = 0; sIndex < spokenWords.length; sIndex++) {
+        // If we ran out of target words, stop processing
         if (tIndex >= nextState.length) break;
 
         const spokenWord = spokenWords[sIndex];
@@ -199,22 +264,20 @@ const TextFollower: React.FC<TextFollowerProps> = ({ text = '', onComplete }) =>
         if (!sNorm) continue;
 
         let matchIndex = -1;
-        let matchDistance = 0;
         const currentTarget = nextState[tIndex];
         const tNorm = normalize(currentTarget.core);
 
-        const fuzzyResult = isFuzzyMatch(tNorm, sNorm);
-        if (fuzzyResult.matches) {
+        // 1. Direct Match (Current Word)
+        if (isFuzzyMatch(tNorm, sNorm)) {
           matchIndex = tIndex;
-          matchDistance = fuzzyResult.distance;
         } else {
+          // 2. Lookahead (Did they skip a word?)
           for (let offset = 1; offset <= SEARCH_WINDOW; offset++) {
             const candidateIdx = tIndex + offset;
             if (candidateIdx < nextState.length) {
               const candidateNorm = normalize(nextState[candidateIdx].core);
               if (candidateNorm === sNorm) {
                 matchIndex = candidateIdx;
-                matchDistance = 0;
                 break;
               }
             }
@@ -222,18 +285,24 @@ const TextFollower: React.FC<TextFollowerProps> = ({ text = '', onComplete }) =>
         }
 
         if (matchIndex !== -1) {
+          // Matched somewhere!
+          // Mark skipped words as RED
           for (let i = tIndex; i < matchIndex; i++) {
             nextState[i].color = RED;
             nextState[i].punctColor = RED;
           }
-          const wordLength = nextState[matchIndex].core.length;
-          const confidenceColor = getConfidenceColor(matchDistance, wordLength);
-          nextState[matchIndex].color = confidenceColor;
-          nextState[matchIndex].punctColor = confidenceColor;
+          // Mark found word as GREEN
+          nextState[matchIndex].color = GREEN;
+          nextState[matchIndex].punctColor = GREEN;
+          
+          // Advance pointer past the matched word
           tIndex = matchIndex + 1;
         } else {
+          // 3. No Match Found (The Fix)
+          // Mark current word RED and move to the next word
           nextState[tIndex].color = RED;
           nextState[tIndex].punctColor = RED;
+          tIndex++; 
         }
       }
 
@@ -247,19 +316,41 @@ const TextFollower: React.FC<TextFollowerProps> = ({ text = '', onComplete }) =>
           } catch {}
         }
 
-        const missedWordsArray = nextState.filter((w) => w.color === RED).map((w) => w.core);
+        const missedWordsArray = nextState
+          .filter((w) => w.color === RED)
+          .map((word) => {
+            // Strip punctuation, convert to lowercase
+            const cleaned = word.core.replace(/[^\p{L}\p{N}]/gu, '').toLowerCase();
+            return cleaned;
+          })
+          .filter((word) => word.length > 2 && !BLACKLIST_WORDS.has(word)); // Remove short words and blacklisted words
+        
         // Use Set to remove duplicates
         const uniqueMissedWords = Array.from(new Set(missedWordsArray));
 
         console.log('--- SESSION FINISHED ---');
         if (uniqueMissedWords.length > 0) {
           console.log('Missed/Red Words:', uniqueMissedWords);
-          // Enter practice mode
-          setPracticeWords(uniqueMissedWords);
-          setCurrentPracticeIndex(0);
-          setPracticeAttempts(0);
-          setPracticeMode(true);
-          setStatusMsg('Let\'s practice the words you missed!');
+          
+          // Build word confidence list for AI analysis
+          const wordConfidenceList = nextState
+            .filter((w) => !BLACKLIST_WORDS.has(normalize(w.core)) && w.core.length > 2)
+            .map((w) => ({
+              word: w.core,
+              color: w.color,
+              confidence: w.color === GREEN ? 0.95 : w.color === RED ? 0.1 : 0.5
+            }));
+          
+          // Call AI agent to analyze and get likely pronounced words
+          callAIForWordAnalysis(wordConfidenceList, uniqueMissedWords).then((aiResult) => {
+            const finalMissedWords = aiResult || uniqueMissedWords;
+            // Enter practice mode
+            setPracticeWords(finalMissedWords);
+            setCurrentPracticeIndex(0);
+            setPracticeAttempts(0);
+            setPracticeMode(true);
+            setStatusMsg('Let\'s practice the words you missed!');
+          });
         } else {
           console.log('Perfect score! No missed words.');
           setStatusMsg('Finished!');
@@ -287,7 +378,7 @@ const TextFollower: React.FC<TextFollowerProps> = ({ text = '', onComplete }) =>
 
   const handleEnd = useCallback(() => {
     if (practiceMode && isListeningRef.current) {
-      // In practice mode, check attempts
+      // In practice mode, check attempts after mic stops
       const newAttempts = practiceAttempts + 1;
       setPracticeAttempts(newAttempts);
       
@@ -314,16 +405,18 @@ const TextFollower: React.FC<TextFollowerProps> = ({ text = '', onComplete }) =>
           }
         }, 2000);
       } else {
-        // Retry
+        // Retry - keep isListeningRef true and restart
+        setStatusMsg(`Attempt ${newAttempts + 1}/3`);
         setTimeout(() => {
           try {
             if (isListeningRef.current) {
               recognitionRef.current.start();
             }
           } catch {}
-        }, 50);
+        }, 300);
       }
     } else if (recognitionRef.current && isListeningRef.current) {
+      // Auto-restart if it stopped unexpectedly (normal reading mode)
       setTimeout(() => {
         try {
           if (isListeningRef.current) {
@@ -333,6 +426,7 @@ const TextFollower: React.FC<TextFollowerProps> = ({ text = '', onComplete }) =>
       }, 50);
     } else {
       setListening(false);
+      isListeningRef.current = false;
     }
   }, [practiceMode, practiceAttempts, practiceWords, currentPracticeIndex, onComplete]);
 
@@ -386,15 +480,16 @@ const TextFollower: React.FC<TextFollowerProps> = ({ text = '', onComplete }) =>
   };
 
   const stopListening = useCallback(() => {
+    if (statusMsg === 'Listening...') {
+      setStatusMsg('Stopped');
+    }
+
     isListeningRef.current = false;
     setListening(false);
-    setStatusMsg((prev) => prev === 'Listening...' ? 'Stopped' : prev);
     if (recognitionRef.current) {
-      try {
-        recognitionRef.current.stop();
-      } catch {}
+      recognitionRef.current.stop();
     }
-  }, []);
+  }, [statusMsg]);
 
   const startPractice = useCallback(() => {
     isListeningRef.current = true;
@@ -476,14 +571,38 @@ const TextFollower: React.FC<TextFollowerProps> = ({ text = '', onComplete }) =>
               {practiceWords[currentPracticeIndex]}
             </div>
             
-            {!listening && practiceResult === null && (
+            <div style={{
+              display: 'flex',
+              gap: '1rem',
+              justifyContent: 'center',
+              width: '100%',
+              flexWrap: 'wrap',
+            }}>
               <button
-                onClick={startPractice}
-                style={styles.btn}
+                onClick={() => speakWord(practiceWords[currentPracticeIndex])}
+                style={{
+                  ...styles.btn,
+                  background: '#3b82f6',
+                  flex: '0 1 auto',
+                  minWidth: '150px',
+                }}
               >
-                {practiceAttempts === 0 ? 'Start Practice' : `Try Again (${practiceAttempts}/3)`}
+                🔊 Hear It
               </button>
-            )}
+              
+              {!listening && practiceResult === null && (
+                <button
+                  onClick={startPractice}
+                  style={{
+                    ...styles.btn,
+                    flex: '0 1 auto',
+                    minWidth: '150px',
+                  }}
+                >
+                  {practiceAttempts === 0 ? 'Start Practice' : `Try Again (${practiceAttempts}/3)`}
+                </button>
+              )}
+            </div>
             
             {practiceResult === 'correct' && (
               <div style={{ color: '#2ecc71', fontWeight: 'bold', marginTop: '1rem' }}>✓ Correct!</div>
@@ -580,6 +699,8 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: 'center',
     justifyContent: 'center',
     padding: '2rem',
+    width: '100%',
+    gap: '1.5rem',
   },
   practiceWord: {
     fontSize: '3rem',
@@ -593,3 +714,7 @@ const styles: Record<string, React.CSSProperties> = {
 };
 
 export default TextFollower;
+
+
+
+

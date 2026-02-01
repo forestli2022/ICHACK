@@ -7,6 +7,7 @@ from database import get_db
 from models import User, ReadingSession, Quiz, QuizResponse, WordKnowledge
 from schemas import QuizQuestion, QuizAnswer, QuizResult, QuizBatch, QuizSessionResult, QuizTypeAccuracy
 from ai_service import generate_quizzes, validate_open_ended_answer
+import json
 
 router = APIRouter()
 
@@ -248,3 +249,48 @@ def retake_quiz(session_id: int, db: Session = Depends(get_db)):
     db.refresh(new_session)
 
     return _build_quiz_batch(new_session, db)
+
+
+@router.post("/analyze-pronunciation")
+async def analyze_pronunciation_words(request: dict):
+    """Analyze word confidence scores and determine likely missed words using AI."""
+    try:
+        word_list = request.get("word_list", [])
+        missed_words = request.get("missed_words", [])
+        
+        # Use AI to analyze and filter words
+        analyzed_words = validate_open_ended_answer(
+            user_answer=json.dumps({
+                "word_list": word_list,
+                "missed_words": missed_words
+            }),
+            correct_answer="Analyze the word list and return only the words that are most likely to have been mispronounced based on confidence scores. Filter out any words that might have false positives.",
+            question_type="pronunciation_analysis"
+        )
+        
+        # Parse the result back
+        import ast
+        try:
+            # Try to extract list from AI response
+            result_text = str(analyzed_words).strip()
+            # Look for a list pattern in the response
+            if '[' in result_text:
+                start = result_text.find('[')
+                end = result_text.rfind(']') + 1
+                result_text = result_text[start:end]
+                final_words = ast.literal_eval(result_text)
+            else:
+                final_words = missed_words
+        except:
+            final_words = missed_words
+        
+        return {
+            "analyzed_words": final_words,
+            "confidence": "analyzed"
+        }
+    except Exception as e:
+        print(f"Error analyzing pronunciation: {e}")
+        return {
+            "analyzed_words": request.get("missed_words", []),
+            "confidence": "fallback"
+        }
