@@ -19,6 +19,7 @@ class User(Base):
     sessions = relationship("ReadingSession", back_populates="user")
     word_knowledge = relationship("WordKnowledge", back_populates="user")
     quiz_responses = relationship("QuizResponse", back_populates="user")
+    story_history = relationship("StoryHistory", back_populates="user")
 
 class ReadingSession(Base):
     __tablename__ = "reading_sessions"
@@ -105,3 +106,15 @@ class WordDifficulty(Base):
     # Relationships
     user = relationship("User")
     session = relationship("ReadingSession")
+
+class StoryHistory(Base):
+    __tablename__ = "story_history"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"))
+    title = Column(String, nullable=False)
+    summary = Column(String, nullable=False)  # Short summary to avoid similarity
+    generated_at = Column(DateTime, default=datetime.utcnow, index=True)
+    
+    # Relationships
+    user = relationship("User", back_populates="story_history")

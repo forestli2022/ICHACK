@@ -3,8 +3,9 @@ import re
 
 from langgraph.graph import StateGraph, END
 from sqlalchemy.orm import Session
+from sqlalchemy import desc
 
-from models import User, ReadingSession, Quiz, QuizResponse, WordKnowledge, WordDifficulty
+from models import User, ReadingSession, Quiz, QuizResponse, WordKnowledge, WordDifficulty, StoryHistory
 from schemas import QuizQuestion
 from ai_service import generate_story, generate_quizzes
 
@@ -70,6 +71,16 @@ def _generate_story_node(db: Session, state: AgentState) -> Dict:
     ).order_by(ReadingSession.started_at.desc()).limit(3).all()
     avoid_titles = [t[0] for t in recent_titles if t[0]]
 
+    # Fetch recent story history (up to 50 most recent) to avoid similar stories
+    recent_stories = db.query(StoryHistory).filter(
+        StoryHistory.user_id == user.id
+    ).order_by(desc(StoryHistory.generated_at)).limit(50).all()
+    
+    recent_story_context = "\n".join([
+        f"- Title: {s.title}\n  Summary: {s.summary}"
+        for s in recent_stories
+    ]) if recent_stories else "No previous stories."
+
     story_data = generate_story(
         reading_level=difficulty,
         interests=user.interests,
@@ -77,7 +88,8 @@ def _generate_story_node(db: Session, state: AgentState) -> Dict:
         known_words=[w.word for w in known_words],
         focus_words=[w.word for w in focus_words],
         style_hint=style_hint,
-        avoid_titles=avoid_titles
+        avoid_titles=avoid_titles,
+        recent_story_context=recent_story_context
     )
 
     return {
@@ -153,6 +165,36 @@ def _persist_story_node(db: Session, state: AgentState) -> Dict:
     db.add(session)
     db.commit()
     db.refresh(session)
+
+    # Store story in history (max 50 most recent)
+    story_title = state.get("story_title", "Untitled Story")
+    # Generate a summary from the first 100 characters of the story
+    story_content = state.get("story_content", "")
+    summary = story_content[:150] if story_content else ""
+    
+    history = StoryHistory(
+        user_id=user_id,
+        title=story_title,
+        summary=summary
+    )
+    db.add(history)
+    db.commit()
+    
+    # Clean up old stories, keeping only the 50 most recent
+    old_count = db.query(StoryHistory).filter(
+        StoryHistory.user_id == user_id
+    ).count()
+    
+    if old_count > 50:
+        # Delete oldest stories
+        to_delete = old_count - 50
+        oldest = db.query(StoryHistory).filter(
+            StoryHistory.user_id == user_id
+        ).order_by(StoryHistory.generated_at.asc()).limit(to_delete).all()
+        
+        for item in oldest:
+            db.delete(item)
+        db.commit()
 
     return {"session_id": session.id}
 

@@ -23,7 +23,8 @@ def generate_story(
     known_words: List[str],
     focus_words: Optional[List[str]] = None,
     style_hint: Optional[str] = None,
-    avoid_titles: Optional[List[str]] = None
+    avoid_titles: Optional[List[str]] = None,
+    recent_story_context: Optional[str] = None
 ) -> Dict:
     """
     Generate a story using OpenAI GPT based on user's reading level and interests.
@@ -64,13 +65,18 @@ def generate_story(
         else ""
     )
 
+    # Build context about recent stories to avoid duplicates
+    recent_context_text = ""
+    if recent_story_context:
+        recent_context_text = f"\n- Do NOT create stories similar to these recent stories the user has already read:\n{recent_story_context}"
+
     prompt = f"""Write a children's story for a {age}-year-old child at a {reading_level} reading level.
 
 Requirements:
 - Word count: {word_count} words
 - Topics the child likes: {interests_str}
 - Reading level: {reading_level}
-- {focus_requirement}{avoid_requirement}{style_hint_text}
+- {focus_requirement}{avoid_requirement}{style_hint_text}{recent_context_text}
 - Use simple, age-appropriate language
 - Include a clear beginning, middle, and end
 - Make it engaging and fun
