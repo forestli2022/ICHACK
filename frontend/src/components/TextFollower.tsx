@@ -210,10 +210,12 @@ const TextFollower: React.FC<TextFollowerProps> = ({ text = '', onComplete }) =>
     }
   }, [activeIndex, targetWords.length]);
 
-  // Re-split when text prop changes
+  // Re-split when text prop changes (but not during practice mode to prevent word shifting)
   useEffect(() => {
-    setTargetWords(splitWords(text));
-  }, [text]);
+    if (!practiceMode) {
+      setTargetWords(splitWords(text));
+    }
+  }, [text, practiceMode]);
 
   const handleResult = useCallback((event: any) => {
     const fullTranscript = Array.from(event.results)

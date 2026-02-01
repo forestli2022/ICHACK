@@ -521,6 +521,9 @@ function ReadingSession({ userId, sessionId, setSessionId }) {
           <button className="button-secondary" onClick={() => navigate('/report')}>
             View Progress Report
           </button>
+          <button className="button-secondary" onClick={() => navigate('/')}>
+            Back to Home
+          </button>
         </div>
       </motion.div>
     );

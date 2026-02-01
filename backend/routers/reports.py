@@ -32,7 +32,7 @@ def get_user_report(user_id: int, db: Session = Depends(get_db)):
     
     # Get recent sessions with details
     recent_sessions = []
-    for session in sessions[:5]:  # Last 5 sessions
+    for session in sessions[:10]:  # Look at up to 10 sessions to get 5 with quiz data
         # Query responses for this specific session
         session_responses = db.query(QuizResponse).filter(
             QuizResponse.session_id == session.id
@@ -40,15 +40,21 @@ def get_user_report(user_id: int, db: Session = Depends(get_db)):
         session_correct = len([r for r in session_responses if r.is_correct])
         session_total = len(session_responses)
         
-        recent_sessions.append(SessionSummary(
-            session_id=session.id,
-            story_title=session.story_title,
-            started_at=session.started_at,
-            completed_at=session.completed_at,
-            total_questions=session_total,
-            correct_answers=session_correct,
-            accuracy=(session_correct / session_total * 100) if session_total > 0 else 0
-        ))
+        # Only include sessions that have quiz responses
+        if session_total > 0:
+            recent_sessions.append(SessionSummary(
+                session_id=session.id,
+                story_title=session.story_title,
+                started_at=session.started_at,
+                completed_at=session.completed_at,
+                total_questions=session_total,
+                correct_answers=session_correct,
+                accuracy=(session_correct / session_total * 100) if session_total > 0 else 0
+            ))
+        
+        # Stop once we have 5 sessions with quiz data
+        if len(recent_sessions) >= 5:
+            break
     
     # Get word mastery
     word_knowledge = db.query(WordKnowledge).filter(

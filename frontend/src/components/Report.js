@@ -15,6 +15,7 @@ function Report({ userId }) {
   const loadReport = async () => {
     try {
       const response = await reportAPI.getUserReport(userId);
+      console.log('Report data loaded:', response.data);
       setReport(response.data);
     } catch (error) {
       console.error('Error loading report:', error);
@@ -63,19 +64,19 @@ function Report({ userId }) {
             <h3>Overall Statistics</h3>
             <div className="stat-grid">
               <div className="stat-card">
-                <div className="stat-value">{report.total_sessions}</div>
+                <div className="stat-value">{report.total_sessions || 0}</div>
                 <div className="stat-label">Sessions Completed</div>
               </div>
               <div className="stat-card">
-                <div className="stat-value">{report.total_questions_answered}</div>
+                <div className="stat-value">{report.total_questions_answered || 0}</div>
                 <div className="stat-label">Questions Answered</div>
               </div>
               <div className="stat-card">
-                <div className="stat-value">{report.overall_accuracy.toFixed(0)}%</div>
+                <div className="stat-value">{((report.overall_accuracy || 0).toFixed(0))}%</div>
                 <div className="stat-label">Overall Accuracy</div>
               </div>
               <div className="stat-card">
-                <div className="stat-value">{report.user.reading_level}</div>
+                <div className="stat-value" style={{ textAlign: 'center' }}>{report.user.reading_level}</div>
                 <div className="stat-label">Reading Level</div>
               </div>
             </div>
