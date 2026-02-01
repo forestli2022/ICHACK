@@ -101,28 +101,31 @@ export type TextFollowerProps = {
 };
 
 // Call AI agent to analyze word confidence and get likely missed words
-const callAIForWordAnalysis = async (wordConfidenceList: any[], missedWords: string[]): Promise<string[]> => {
+const callAIForWordAnalysis = async (wordConfidenceList: any[], storyContext: string = ''): Promise<string[]> => {
   try {
     console.log('🤖 Calling AI to analyze word confidence...');
-    console.log('Word list:', wordConfidenceList);
+    console.log('Word confidences:', wordConfidenceList);
     const response = await fetch('http://localhost:8000/api/quizzes/analyze-pronunciation', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        word_list: wordConfidenceList,
-        missed_words: missedWords,
+        word_confidences: wordConfidenceList,
+        story_context: storyContext,
       }),
     });
     
     if (!response.ok) throw new Error('AI analysis failed');
     const data = await response.json();
     console.log('✅ AI analysis result:', data.analyzed_words);
-    return data.analyzed_words || missedWords;
+    return data.analyzed_words || [];
   } catch (error) {
     console.error('❌ Error calling AI for word analysis:', error);
-    return missedWords; // Fallback to original list
+    // Fallback: filter by confidence threshold
+    return wordConfidenceList
+      .filter(item => item.confidence < 0.5)
+      .map(item => item.word);
   }
 };
 
@@ -164,6 +167,9 @@ const TextFollower: React.FC<TextFollowerProps> = ({ text = '', onComplete }) =>
   const [practiceResult, setPracticeResult] = useState<'correct' | 'incorrect' | null>(null);
   // Prevent UI from reverting to story while parent handles completion
   const [awaitingCompletion, setAwaitingCompletion] = useState(false);
+  
+  // Lock words list during practice to prevent swapping
+  const lockedPracticeWordsRef = useRef<string[]>([]);
 
   // Clear awaiting state after a short timeout if parent doesn't advance
   useEffect(() => {
@@ -198,14 +204,28 @@ const TextFollower: React.FC<TextFollowerProps> = ({ text = '', onComplete }) =>
     setTargetWords(splitWords(text));
   }, [text]);
 
-  // Auto-speak when entering practice mode or moving to next word
+  // Auto-speak when entering practice mode or moving to next word (memoized to prevent re-triggers)
+  const practiceWordsRef = useRef<string[]>([]);
+  
   useEffect(() => {
-    if (practiceMode && currentPracticeIndex < practiceWords.length && !listening) {
-      setTimeout(() => {
-        speakWord(practiceWords[currentPracticeIndex]);
-      }, 500);
+    if (practiceMode) {
+      // Use locked words to prevent stale data
+      practiceWordsRef.current = lockedPracticeWordsRef.current || practiceWords;
     }
-  }, [practiceMode, currentPracticeIndex, practiceWords, listening]);
+  }, [practiceMode, practiceWords]);
+  
+  useEffect(() => {
+    if (practiceMode && currentPracticeIndex < practiceWordsRef.current.length && !listening) {
+      const word = practiceWordsRef.current[currentPracticeIndex];
+      if (word) {
+        const timer = setTimeout(() => {
+          console.log(`🔊 Speaking practice word: ${word}`);
+          speakWord(word);
+        }, 500);
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [practiceMode, currentPracticeIndex, listening]);
 
   const handleResult = useCallback((event: any) => {
     const fullTranscript = Array.from(event.results)
@@ -241,7 +261,7 @@ const TextFollower: React.FC<TextFollowerProps> = ({ text = '', onComplete }) =>
         
         setTimeout(() => {
           setPracticeResult(null);
-          if (currentPracticeIndex + 1 < practiceWords.length) {
+          if (currentPracticeIndex + 1 < lockedPracticeWordsRef.current.length) {
             setCurrentPracticeIndex(currentPracticeIndex + 1);
             setPracticeAttempts(0);
             setStatusMsg('Great! Next word...');
@@ -251,7 +271,7 @@ const TextFollower: React.FC<TextFollowerProps> = ({ text = '', onComplete }) =>
             setAwaitingCompletion(true);
             setStatusMsg('Practice complete — submitting...');
             if (onComplete) {
-              onComplete(practiceWords);
+              onComplete(lockedPracticeWordsRef.current);
             }
           }
         }, 1000);
@@ -354,18 +374,31 @@ const TextFollower: React.FC<TextFollowerProps> = ({ text = '', onComplete }) =>
               confidence: w.color === GREEN ? 0.95 : w.color === RED ? 0.1 : 0.5
             }));
           
-          // Call AI agent to analyze and get likely pronounced words
-          callAIForWordAnalysis(wordConfidenceList, uniqueMissedWords).then((aiResult) => {
-            const finalMissedWords = aiResult || uniqueMissedWords;
-            // Sort by length descending and keep only the top 3
-            const sortedByLength = finalMissedWords.sort((a, b) => b.length - a.length);
-            const topThreeWords = sortedByLength.slice(0, 3);
-            // Enter practice mode
-            setPracticeWords(topThreeWords);
-            setCurrentPracticeIndex(0);
-            setPracticeAttempts(0);
-            setPracticeMode(true);
-            setStatusMsg('Let\'s practice the words you missed!');
+          // Call AI agent to analyze and get genuinely difficult words
+          callAIForWordAnalysis(wordConfidenceList, text.slice(0, 500)).then((aiResult) => {
+            const finalMissedWords = aiResult || [];
+            
+            if (finalMissedWords.length > 0) {
+              // Sort by length descending and keep only the top 3
+              const sortedByLength = finalMissedWords.sort((a, b) => b.length - a.length);
+              const topThreeWords = sortedByLength.slice(0, 3);
+              // Lock the words to prevent swapping during practice
+              lockedPracticeWordsRef.current = topThreeWords;
+              // Enter practice mode
+              setPracticeWords(topThreeWords);
+              setCurrentPracticeIndex(0);
+              setPracticeAttempts(0);
+              setPracticeMode(true);
+              setStatusMsg('Let\'s practice the words you missed!');
+            } else {
+              console.log('AI filtered out all words - no practice needed!');
+              // No genuinely difficult words — signal completion
+              setAwaitingCompletion(true);
+              setStatusMsg('Finished — submitting...');
+              if (onComplete) {
+                onComplete([]);
+              }
+            }
           });
         } else {
           console.log('Perfect score! No missed words.');
@@ -404,11 +437,11 @@ const TextFollower: React.FC<TextFollowerProps> = ({ text = '', onComplete }) =>
         setPracticeResult('incorrect');
         isListeningRef.current = false;
         setListening(false);
-        setStatusMsg(`Try: ${practiceWords[currentPracticeIndex]}`);
+        setStatusMsg(`Try: ${lockedPracticeWordsRef.current[currentPracticeIndex]}`);
         
         setTimeout(() => {
           setPracticeResult(null);
-          if (currentPracticeIndex + 1 < practiceWords.length) {
+          if (currentPracticeIndex + 1 < lockedPracticeWordsRef.current.length) {
             setCurrentPracticeIndex(currentPracticeIndex + 1);
             setPracticeAttempts(0);
             setStatusMsg('Let\'s try the next word...');
@@ -418,7 +451,7 @@ const TextFollower: React.FC<TextFollowerProps> = ({ text = '', onComplete }) =>
             setAwaitingCompletion(true);
             setStatusMsg('Practice complete — submitting...');
             if (onComplete) {
-              onComplete(practiceWords);
+              onComplete(lockedPracticeWordsRef.current);
             }
           }
         }, 2000);

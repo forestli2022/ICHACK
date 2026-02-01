@@ -109,6 +109,8 @@ class AgentRunResponse(BaseModel):
     content: str
     difficulty: str
     questions: List[QuizQuestion]
+    exploration_words: Optional[List[str]] = []  # New words for exploration
+    exploitation_words: Optional[List[str]] = []  # Difficult words to reinforce
 
 # Report Schemas
 class WordProgress(BaseModel):

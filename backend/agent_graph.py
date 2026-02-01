@@ -1,5 +1,7 @@
 from typing import TypedDict, Optional, List, Dict
 import re
+import random
+from datetime import datetime
 
 from langgraph.graph import StateGraph, END
 from sqlalchemy.orm import Session
@@ -8,6 +10,29 @@ from sqlalchemy import desc
 from models import User, ReadingSession, Quiz, QuizResponse, WordKnowledge, WordDifficulty, StoryHistory
 from schemas import QuizQuestion
 from ai_service import generate_story, generate_quizzes
+
+# Exploration-exploitation ratio
+EXPLOITATION_RATIO = 0.6  # 60% exploitation (difficult words), 40% exploration (new words)
+
+# Word pools for exploration by reading level
+EXPLORATION_WORDS = {
+    "beginner": [
+        "sparkle", "giggle", "wobble", "whisper", "flutter", "bounce", "tumble", "splash",
+        "glitter", "twirl", "peek", "dash", "scramble", "wiggle", "shimmer", "tiptoe",
+        "snuggle", "nibble", "huddle", "marvel", "rustle", "breeze", "shadow", "meadow"
+    ],
+    "intermediate": [
+        "adventure", "mysterious", "discover", "imagine", "treasure", "courage", "curious", "wonderful",
+        "explore", "journey", "magical", "enchanted", "brilliant", "beneath", "ancient", "crystal",
+        "harmony", "graceful", "whispered", "shimmered", "gleaming", "majestic", "extraordinary", "luminous"
+    ],
+    "advanced": [
+        "magnificent", "extraordinary", "fascinating", "phenomenon", "perseverance", "determination", "curiosity",
+        "intricate", "mesmerizing", "spectacular", "brilliant", "remarkable", "astonishing", "breathtaking",
+        "mysterious", "unprecedented", "revolutionary", "magnificent", "transcendent", "enigmatic", "captivating",
+        "illuminate", "resonate", "flourish", "embark", "endeavor", "contemplate", "navigate"
+    ]
+}
 
 
 class AgentState(TypedDict, total=False):
@@ -18,6 +43,8 @@ class AgentState(TypedDict, total=False):
     story_content: str
     questions: List[QuizQuestion]
     focus_words: List[str]
+    exploration_words: List[str]  # New words for exploration
+    exploitation_words: List[str]  # Words to reinforce
     known_words: List[str]
     weak_words: List[str]
     attempts: int
@@ -41,14 +68,67 @@ def _generate_story_node(db: Session, state: AgentState) -> Dict:
         WordKnowledge.familiarity_score > 0.7
     ).all()
 
-    focus_words = db.query(WordKnowledge).filter(
+    # Get words user struggles with for exploitation
+    focus_words_db = db.query(WordKnowledge).filter(
         WordKnowledge.user_id == user.id,
         WordKnowledge.familiarity_score < 0.4
-    ).order_by(WordKnowledge.familiarity_score.asc()).limit(8).all()
+    ).order_by(WordKnowledge.familiarity_score.asc()).limit(12).all()
 
     difficulty_words = db.query(WordDifficulty).filter(
         WordDifficulty.user_id == user.id
-    ).order_by(WordDifficulty.created_at.desc()).limit(8).all()
+    ).order_by(WordDifficulty.created_at.desc()).limit(12).all()
+    
+    # Combine difficult words for exploitation (ensure uniqueness)
+    exploitation_words = set()
+    exploitation_words.update([w.word.lower() for w in focus_words_db])
+    exploitation_words.update([w.word.lower() for w in difficulty_words])
+    exploitation_words = list(exploitation_words)
+    
+    print(f"🔍 Exploitation word pool: {exploitation_words}")
+    
+    # Get all words user has seen
+    all_seen_words = set(w.word.lower() for w in db.query(WordKnowledge).filter(
+        WordKnowledge.user_id == user.id
+    ).all())
+    
+    print(f"👀 User has seen {len(all_seen_words)} words total")
+    
+    # Get exploration word pool for user's level
+    exploration_pool = EXPLORATION_WORDS.get(difficulty, EXPLORATION_WORDS["beginner"])
+    # Filter out words the user has already seen
+    unseen_exploration_words = [w for w in exploration_pool if w.lower() not in all_seen_words]
+    
+    print(f"✨ Available exploration words: {len(unseen_exploration_words)} - {unseen_exploration_words[:10]}")
+    
+    # Calculate how many words to use (target 8 focus words)
+    target_focus_count = 8
+    exploitation_count = int(target_focus_count * EXPLOITATION_RATIO)  # 60% = ~5 words
+    exploration_count = target_focus_count - exploitation_count  # 40% = ~3 words
+    
+    # Sample exploitation words (difficult words user has seen)
+    selected_exploitation = random.sample(
+        exploitation_words, 
+        min(exploitation_count, len(exploitation_words))
+    ) if exploitation_words else []
+    
+    # Sample exploration words (new words user hasn't seen)
+    selected_exploration = random.sample(
+        unseen_exploration_words, 
+        min(exploration_count, len(unseen_exploration_words))
+    ) if unseen_exploration_words else []
+    
+    # Combine for final focus words
+    focus_words = selected_exploitation + selected_exploration
+    
+    print(f"📚 Selected {len(selected_exploitation)} exploitation words: {selected_exploitation}")
+    print(f"✨ Selected {len(selected_exploration)} exploration words: {selected_exploration}")
+    
+    # If we don't have enough words, fill from exploitation pool
+    if len(focus_words) < target_focus_count and exploitation_words:
+        remaining = target_focus_count - len(focus_words)
+        additional = [w for w in exploitation_words if w not in focus_words][:remaining]
+        focus_words.extend(additional)
+        print(f"➕ Added {len(additional)} additional exploitation words: {additional}")
 
     attempt = state.get("attempts", 0)
     max_attempts = state.get("max_attempts", 2)
@@ -86,19 +166,26 @@ def _generate_story_node(db: Session, state: AgentState) -> Dict:
         interests=user.interests,
         age=user.age,
         known_words=[w.word for w in known_words],
-        focus_words=[w.word for w in focus_words],
+        focus_words=focus_words,  # Now includes both exploitation and exploration words
+        exploitation_words=selected_exploitation,
+        exploration_words=selected_exploration,
         style_hint=style_hint,
         avoid_titles=avoid_titles,
         recent_story_context=recent_story_context
     )
+    
+    # Extract actual exploration words that Gemini used (from NEW_WORDS section)
+    actual_exploration_words = story_data.get("new_words", []) or selected_exploration
 
     return {
         "story_title": story_data["title"],
         "story_content": story_data["content"],
         "difficulty": difficulty,
-        "focus_words": [w.word for w in focus_words],
+        "focus_words": focus_words,
+        "exploration_words": actual_exploration_words,  # Use words from Gemini's NEW_WORDS section
+        "exploitation_words": selected_exploitation,
         "known_words": [w.word for w in known_words],
-        "weak_words": list({w.word for w in focus_words} | {w.word for w in difficulty_words}),
+        "weak_words": list(set(focus_words) | {w.word for w in difficulty_words}),
         "attempts": attempt + 1,
         "max_attempts": max_attempts
     }
@@ -165,6 +252,32 @@ def _persist_story_node(db: Session, state: AgentState) -> Dict:
     db.add(session)
     db.commit()
     db.refresh(session)
+    
+    # Track all focus words used in this story as "seen" by the user
+    focus_words = state.get("focus_words", [])
+    if focus_words:
+        from datetime import datetime as dt
+        for word in focus_words:
+            word_clean = word.strip().lower()
+            word_knowledge = db.query(WordKnowledge).filter(
+                WordKnowledge.user_id == user_id,
+                WordKnowledge.word == word_clean
+            ).first()
+            
+            if word_knowledge:
+                # Word already exists, just mark it as seen again
+                word_knowledge.times_seen += 1
+                word_knowledge.last_seen = dt.utcnow()
+            else:
+                # New word - add to knowledge base
+                word_knowledge = WordKnowledge(
+                    user_id=user_id,
+                    word=word_clean,
+                    times_seen=1,
+                    times_correct=0,
+                    familiarity_score=0.0  # Not tested yet, so 0
+                )
+                db.add(word_knowledge)
 
     # Store story in history (max 50 most recent)
     story_title = state.get("story_title", "Untitled Story")
@@ -223,7 +336,9 @@ def _generate_quizzes_node(db: Session, state: AgentState) -> Dict:
         recent_performance=[{
             "correct": response.is_correct,
             "question_type": quiz.question_type
-        } for response, quiz in recent_responses]
+        } for response, quiz in recent_responses],
+        exploration_words=state.get("exploration_words", []),
+        exploitation_words=state.get("exploitation_words", [])
     )
 
     quiz_questions: List[QuizQuestion] = []

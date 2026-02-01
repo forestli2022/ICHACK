@@ -38,13 +38,16 @@ function ReadingSession({ userId, sessionId, setSessionId }) {
         session_id: response.data.session_id,
         title: response.data.title,
         content: response.data.content,
-        difficulty: response.data.difficulty
+        difficulty: response.data.difficulty,
+        exploration_words: response.data.exploration_words || [],
+        exploitation_words: response.data.exploitation_words || []
       });
       // Store quizzes from agent response
       setQuizzes(response.data.questions || []);
       setSessionResults(null);
       setStage('story');
       console.log('Story generation successful!');
+      console.log('Exploration words:', response.data.exploration_words);
     } catch (error) {
       console.error('=== GENERATE STORY ERROR ===');
       console.error('Error type:', error.constructor.name);
@@ -202,6 +205,72 @@ function ReadingSession({ userId, sessionId, setSessionId }) {
   }
 
   if (stage === 'story') {
+    // Function to highlight exploration and exploitation words
+    const highlightWords = (text, explorationWords, exploitationWords) => {
+      if ((!explorationWords || explorationWords.length === 0) && 
+          (!exploitationWords || exploitationWords.length === 0)) {
+        return text;
+      }
+
+      const allWords = [
+        ...(explorationWords || []).map(w => ({ word: w, type: 'exploration' })),
+        ...(exploitationWords || []).map(w => ({ word: w, type: 'exploitation' }))
+      ];
+
+      if (allWords.length === 0) return text;
+
+      // Create regex pattern for all words
+      const pattern = new RegExp(`\\b(${allWords.map(w => w.word).join('|')})\\b`, 'gi');
+      
+      // Create lookup map (lowercase)
+      const wordTypeMap = {};
+      allWords.forEach(({ word, type }) => {
+        wordTypeMap[word.toLowerCase()] = type;
+      });
+
+      const parts = [];
+      let lastIndex = 0;
+      let match;
+      
+      const regex = new RegExp(pattern);
+      while ((match = regex.exec(text)) !== null) {
+        // Add text before match
+        if (match.index > lastIndex) {
+          parts.push(text.slice(lastIndex, match.index));
+        }
+        
+        // Determine word type
+        const wordType = wordTypeMap[match[0].toLowerCase()];
+        const isExploration = wordType === 'exploration';
+        
+        // Add highlighted match
+        parts.push(
+          <span 
+            key={match.index} 
+            style={{ 
+              backgroundColor: isExploration ? '#ffd700' : '#ffcccc',
+              color: '#000',
+              padding: '2px 4px',
+              borderRadius: '3px',
+              fontWeight: '500',
+              borderBottom: isExploration ? 'none' : '2px solid #e74c3c'
+            }}
+            title={isExploration ? "✨ New word!" : "🔄 Practice word"}
+          >
+            {match[0]}
+          </span>
+        );
+        lastIndex = regex.lastIndex;
+      }
+      
+      // Add remaining text
+      if (lastIndex < text.length) {
+        parts.push(text.slice(lastIndex));
+      }
+      
+      return parts.length > 0 ? parts : text;
+    };
+
     return (
       <motion.div
         className="card-container"
@@ -211,8 +280,38 @@ function ReadingSession({ userId, sessionId, setSessionId }) {
       >
         <div className="card-content">
           <h2>{story.title}</h2>
+          {((story.exploration_words && story.exploration_words.length > 0) ||
+            (story.exploitation_words && story.exploitation_words.length > 0)) && (
+            <div style={{ marginBottom: '15px' }}>
+              {story.exploration_words && story.exploration_words.length > 0 && (
+                <div style={{ 
+                  marginBottom: '10px',
+                  padding: '10px', 
+                  backgroundColor: '#fff9e6', 
+                  borderRadius: '8px',
+                  fontSize: '14px',
+                  color: '#856404',
+                  borderLeft: '4px solid #ffd700'
+                }}>
+                  ✨ <strong>New words to discover:</strong> {story.exploration_words.join(', ')}
+                </div>
+              )}
+              {story.exploitation_words && story.exploitation_words.length > 0 && (
+                <div style={{ 
+                  padding: '10px', 
+                  backgroundColor: '#ffe6e6', 
+                  borderRadius: '8px',
+                  fontSize: '14px',
+                  color: '#721c24',
+                  borderLeft: '4px solid #e74c3c'
+                }}>
+                  🔄 <strong>Words to practice:</strong> {story.exploitation_words.join(', ')}
+                </div>
+              )}
+            </div>
+          )}
           <div className="story-content">
-            {story.content}
+            {highlightWords(story.content, story.exploration_words, story.exploitation_words)}
           </div>
           <button className="button-primary" onClick={startQuiz}>
             Start Quiz →
@@ -246,8 +345,25 @@ function ReadingSession({ userId, sessionId, setSessionId }) {
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
               <TextFollower 
                 text={story?.content || currentQuiz.correct_answer} 
-                onComplete={(missedWords) => {
-                  // After practice words, go straight to report/completion page
+                onComplete={async (missedWords) => {
+                  console.log('TextFollower completed with missed words:', missedWords);
+                  
+                  // Submit pronunciation result with missed words
+                  // The TextFollower already called the AI agent and filtered them
+                  try {
+                    await quizAPI.submitAnswer(sessionId || story.session_id, {
+                      quiz_id: currentQuiz.id,
+                      user_answer: JSON.stringify({ 
+                        missed_words: missedWords,
+                        ai_filtered: true  // Flag indicating AI already analyzed
+                      }),
+                      time_taken_seconds: Math.floor((Date.now() - startTime) / 1000),
+                    });
+                  } catch (error) {
+                    console.error('Error submitting pronunciation result:', error);
+                  }
+                  
+                  // Go to completion/report page
                   completeSession();
                 }}
               />

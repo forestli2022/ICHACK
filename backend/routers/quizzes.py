@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from database import get_db
 from models import User, ReadingSession, Quiz, QuizResponse, WordKnowledge
@@ -86,29 +86,68 @@ def submit_quiz_answer(
     if quiz.question_type == "reading":  # Multiple choice
         is_correct = answer.user_answer.strip().lower() == quiz.correct_answer.strip().lower()
         explanation = f"The correct answer is '{quiz.correct_answer}'"
-    elif quiz.question_type == "pronunciation":  # Pronunciation: user_answer is JSON string of missed words
+    elif quiz.question_type == "pronunciation":  # Pronunciation: user_answer is JSON with word confidences or already-filtered words
         import json
         try:
-            missed_words = json.loads(answer.user_answer) if answer.user_answer else []
-            is_correct = len(missed_words) == 0
+            pronunciation_data = json.loads(answer.user_answer) if answer.user_answer else {}
             
-            # Record pronunciation difficulties
+            # Check if words are already AI-filtered from frontend
+            if pronunciation_data.get('ai_filtered'):
+                # Words already filtered by AI agent on frontend
+                difficult_words = pronunciation_data.get('missed_words', [])
+            else:
+                # Get word confidence scores from the data and run AI analysis
+                word_confidences = pronunciation_data.get('word_confidences', [])
+                missed_words_raw = pronunciation_data.get('missed_words', [])
+                
+                # Use AI agent to intelligently filter difficult words
+                from ai_service import analyze_pronunciation_difficulties
+                
+                if word_confidences:
+                    # Use the intelligent agent with confidence scores
+                    difficult_words = analyze_pronunciation_difficulties(
+                        word_confidences=word_confidences,
+                        story_context=session.story_content[:500]  # Pass story context for better analysis
+                    )
+                else:
+                    # Fallback to basic filtering if no confidence data
+                    difficult_words = [w for w in missed_words_raw 
+                                     if w.lower() not in ['um', 'uh', 'like', 'and', 'but', 'the', 'a', 'an']]
+            
+            is_correct = len(difficult_words) == 0
+            
+            # Record only genuinely difficult pronunciation words (avoid duplicates)
             from models import WordDifficulty
-            for word in missed_words:
-                difficulty_record = WordDifficulty(
-                    user_id=session.user_id,
-                    word=word,
-                    difficulty_type="pronunciation",
-                    session_id=session_id,
-                    description=f"Missed during read-aloud exercise"
-                )
-                db.add(difficulty_record)
+            
+            for word in difficult_words:
+                word_clean = word.strip().lower()
+                
+                # Check if this word was already marked as difficult recently (within last 24 hours)
+                recent_difficulty = db.query(WordDifficulty).filter(
+                    WordDifficulty.user_id == session.user_id,
+                    WordDifficulty.word == word_clean,
+                    WordDifficulty.difficulty_type == "pronunciation",
+                    WordDifficulty.created_at >= datetime.utcnow() - timedelta(hours=24)
+                ).first()
+                
+                if not recent_difficulty:
+                    difficulty_record = WordDifficulty(
+                        user_id=session.user_id,
+                        word=word_clean,
+                        difficulty_type="pronunciation",
+                        session_id=session_id,
+                        description=f"AI-identified pronunciation difficulty"
+                    )
+                    db.add(difficulty_record)
             
             if is_correct:
                 explanation = "Great job! You read the passage perfectly."
             else:
-                explanation = f"Good effort! Practice these words: {', '.join(missed_words)}"
-        except:
+                explanation = f"Good effort! Practice these words: {', '.join(difficult_words)}"
+        except Exception as e:
+            print(f"Error processing pronunciation: {e}")
+            import traceback
+            traceback.print_exc()
             is_correct = False
             explanation = "Pronunciation check failed"
     elif quiz.question_type in ["fill_blank", "general"]:  # Open-ended: use Gemini validation
@@ -253,44 +292,40 @@ def retake_quiz(session_id: int, db: Session = Depends(get_db)):
 
 @router.post("/analyze-pronunciation")
 async def analyze_pronunciation_words(request: dict):
-    """Analyze word confidence scores and determine likely missed words using AI."""
+    """Analyze word confidence scores and determine genuinely difficult words using AI agent."""
     try:
-        word_list = request.get("word_list", [])
-        missed_words = request.get("missed_words", [])
+        word_confidences = request.get("word_confidences", [])
+        story_context = request.get("story_context", "")
         
-        # Use AI to analyze and filter words
-        analyzed_words = validate_open_ended_answer(
-            user_answer=json.dumps({
-                "word_list": word_list,
-                "missed_words": missed_words
-            }),
-            correct_answer="Analyze the word list and return only the words that are most likely to have been mispronounced based on confidence scores. Filter out any words that might have false positives.",
-            question_type="pronunciation_analysis"
+        # Use intelligent AI agent to filter difficult words
+        from ai_service import analyze_pronunciation_difficulties
+        
+        difficult_words = analyze_pronunciation_difficulties(
+            word_confidences=word_confidences,
+            story_context=story_context
         )
         
-        # Parse the result back
-        import ast
-        try:
-            # Try to extract list from AI response
-            result_text = str(analyzed_words).strip()
-            # Look for a list pattern in the response
-            if '[' in result_text:
-                start = result_text.find('[')
-                end = result_text.rfind(']') + 1
-                result_text = result_text[start:end]
-                final_words = ast.literal_eval(result_text)
-            else:
-                final_words = missed_words
-        except:
-            final_words = missed_words
-        
         return {
-            "analyzed_words": final_words,
-            "confidence": "analyzed"
+            "analyzed_words": difficult_words,
+            "count": len(difficult_words),
+            "confidence": "ai_analyzed"
         }
     except Exception as e:
         print(f"Error analyzing pronunciation: {e}")
+        import traceback
+        traceback.print_exc()
+        
+        # Fallback: simple filtering
+        word_confidences = request.get("word_confidences", [])
+        fallback_words = [
+            item['word'].lower()
+            for item in word_confidences
+            if item.get('confidence', 1.0) < 0.5 and 
+               item['word'].lower() not in ['um', 'uh', 'like', 'and', 'but', 'the', 'a', 'an', 'or']
+        ]
+        
         return {
-            "analyzed_words": request.get("missed_words", []),
+            "analyzed_words": fallback_words,
+            "count": len(fallback_words),
             "confidence": "fallback"
         }

@@ -22,16 +22,18 @@ def generate_story(
     age: int,
     known_words: List[str],
     focus_words: Optional[List[str]] = None,
+    exploitation_words: Optional[List[str]] = None,
+    exploration_words: Optional[List[str]] = None,
     style_hint: Optional[str] = None,
     avoid_titles: Optional[List[str]] = None,
     recent_story_context: Optional[str] = None
 ) -> Dict:
     """
-    Generate a story using OpenAI GPT based on user's reading level and interests.
+    Generate a story using Gemini based on user's reading level and interests.
+    Uses exploration-exploitation strategy for vocabulary selection.
     
-    API: OpenAI GPT-4 or GPT-3.5-turbo
-    API Key Required: Yes - set OPENAI_API_KEY environment variable
-    Sign up at: https://platform.openai.com/
+    API: Google Gemini
+    API Key Required: Yes - set GEMINI_API_KEY environment variable
     """
     
     # Create prompt based on reading level
@@ -41,16 +43,50 @@ def generate_story(
         "advanced": "300-500"
     }.get(reading_level, "100-150")
     
-    interests_str = ", ".join(interests) if interests else "animals and adventures"
+    import random
+    
+    # Add variety - randomly select subset of interests or add random themes
+    random_themes = [
+        "space exploration", "underwater adventures", "magical forests", "time travel",
+        "robot friends", "dinosaurs", "superhero adventures", "cooking fun",
+        "music and dance", "sports challenges", "mystery solving", "art creation",
+        "garden adventures", "weather wonders", "city exploration", "farm life"
+    ]
+    
+    if interests and len(interests) > 2:
+        # Pick 1-2 interests randomly instead of all
+        selected_interests = random.sample(interests, min(2, len(interests)))
+        # Maybe add a random theme
+        if random.random() > 0.6:  # 40% chance to add variety
+            selected_interests.append(random.choice(random_themes))
+        interests_str = ", ".join(selected_interests)
+    else:
+        interests_str = ", ".join(interests) if interests else "animals and adventures"
+        # Add a random theme for variety
+        if random.random() > 0.5:  # 50% chance
+            interests_str += ", " + random.choice(random_themes)
     
     focus_words = focus_words or []
+    exploitation_words = exploitation_words or []
+    exploration_words = exploration_words or []
+    
     focus_words_str = ", ".join(focus_words)
 
-    focus_requirement = (
-        f"- Include and naturally use these focus words: {focus_words_str}"
-        if focus_words
-        else "- No required focus words"
-    )
+    # Build detailed focus requirements with exploitation/exploration info
+    focus_requirement_parts = []
+    if exploitation_words:
+        focus_requirement_parts.append(
+            f"Words to reinforce (user struggled with): {', '.join(exploitation_words)}"
+        )
+    if exploration_words:
+        focus_requirement_parts.append(
+            f"New vocabulary to introduce: {', '.join(exploration_words)}"
+        )
+    
+    if focus_requirement_parts:
+        focus_requirement = "- Include and naturally use these focus words:\n  " + "\n  ".join(focus_requirement_parts)
+    else:
+        focus_requirement = "- No required focus words"
     
     avoid_titles = avoid_titles or []
     avoid_requirement = (
@@ -80,16 +116,29 @@ Requirements:
 - Use simple, age-appropriate language
 - Include a clear beginning, middle, and end
 - Make it engaging and fun
+- Be creative and vary the themes - don't make every story too similar!
+- Create unique characters and settings
 - Do NOT use markdown formatting (no **, __, *, _, #, etc.)
 - Write in plain text only
+
+IMPORTANT - Vocabulary Strategy:
+This story uses an exploration-exploitation approach:
+- Some words are for reinforcement (words the child has struggled with previously)
+- Some words are NEW vocabulary to help the child expand their knowledge
+- Weave both types naturally into the story without making it feel forced
 
 Please provide:
 1. A catchy title (on the first line)
 2. The story content (starting from the second line)
+3. A list of the NEW vocabulary words you introduced (the exploration words)
 
-Format:
+CRITICAL: Use this exact format:
 Title: [Your Title Here]
-Story: [Your story here]
+Story: [Your story here - do NOT repeat the title at the beginning of the story]
+NEW_WORDS: [list of new vocabulary words you used, comma-separated]
+
+Do NOT concatenate the title with the story. Keep them separate.
+Make sure to list the actual new words you introduced in the story in the NEW_WORDS section.
 """
 
     try:
@@ -109,15 +158,49 @@ Story: [Your story here]
         title = "A Wonderful Story"
         story_content = content
         
+        # Try to extract title, story, and new words from formatted response
+        new_words = []
         for i, line in enumerate(lines):
             if line.startswith("Title:"):
                 title = line.replace("Title:", "").strip()
-                story_content = '\n'.join(lines[i+1:]).replace("Story:", "").strip()
+                # Extract content until NEW_WORDS or end
+                content_lines = []
+                for j in range(i+1, len(lines)):
+                    if lines[j].startswith("NEW_WORDS:"):
+                        break
+                    content_lines.append(lines[j])
+                story_content = '\n'.join(content_lines).replace("Story:", "").strip()
+                # Extract NEW_WORDS if present
+                for j in range(i+1, len(lines)):
+                    if lines[j].startswith("NEW_WORDS:"):
+                        words_str = lines[j].replace("NEW_WORDS:", "").strip()
+                        new_words = [w.strip() for w in words_str.split(',') if w.strip()]
+                        break
                 break
+        
+        # If title and story are not on separate lines, check if first line might be title
+        # (title-like: short, no periods, often CamelCase or Title Case)
+        if story_content == content and lines:
+            first_line = lines[0].strip()
+            # Check if first line looks like a title (no spaces, CamelCase, or short with no period)
+            if (len(first_line) < 80 and 
+                ('.' not in first_line or first_line.count('.') == 0) and
+                (first_line[0].isupper() if first_line else False)):
+                # Check if it's in CamelCase or TitleCase format without spaces
+                has_no_spaces = ' ' not in first_line
+                has_multiple_caps = sum(1 for c in first_line if c.isupper()) > 1
+                
+                if has_no_spaces and has_multiple_caps:
+                    # Likely a title stuck to the story (e.g., "TheSpaceBasketballAdventureMom...")
+                    title = first_line
+                    # Remove the title from content
+                    story_content = '\n'.join(lines[1:]) if len(lines) > 1 else content.replace(first_line, '', 1)
+                    story_content = story_content.strip()
         
         return {
             "title": title,
-            "content": story_content
+            "content": story_content,
+            "new_words": new_words
         }
     
     except Exception as e:
@@ -128,25 +211,51 @@ Story: [Your story here]
             "content": "Once upon a time, there was a little bird. The bird loved to fly. Every day, the bird would fly high in the sky. One day, the bird met a friend. They flew together and had fun. The end."
         }
 
-def generate_quizzes(story_content: str, reading_level: str, user_age: int, recent_performance: List[Dict]) -> List[Dict]:
+def generate_quizzes(story_content: str, reading_level: str, user_age: int, recent_performance: List[Dict],
+                     exploration_words: Optional[List[str]] = None, exploitation_words: Optional[List[str]] = None) -> List[Dict]:
     """
-    Generate quizzes based on the story using OpenAI GPT.
+    Generate quizzes based on the story using Gemini.
+    Includes extra questions for new vocabulary (exploration words).
     
-    API: OpenAI GPT-4 or GPT-3.5-turbo
-    API Key Required: Yes - set OPENAI_API_KEY environment variable
+    API: Google Gemini
+    API Key Required: Yes - set GEMINI_API_KEY environment variable
     """
     
-    # Determine number of questions based on reading level
-    num_questions = {
+    exploration_words = exploration_words or []
+    exploitation_words = exploitation_words or []
+    
+    # Determine base number of questions based on reading level
+    base_questions = {
         "beginner": 3,
         "intermediate": 5,
         "advanced": 7
     }.get(reading_level, 4)
     
+    # Add extra questions for new words (1 question per 2 exploration words)
+    extra_word_questions = len(exploration_words) // 2 if exploration_words else 0
+    num_questions = base_questions + extra_word_questions
+    
+    exploration_note = ""
+    if exploration_words:
+        exploration_note = f"""
+
+IMPORTANT - NEW VOCABULARY FOCUS:
+These are NEW words the child is learning: {', '.join(exploration_words)}
+Create {extra_word_questions} EXTRA questions specifically about these new words to help the child learn them.
+Use vocabulary questions like: "What does [word] mean?" or "Can you use [word] in a sentence?"
+"""
+    
+    focus_words_note = ""
+    if exploitation_words:
+        focus_words_note = f"""
+Practice words (child struggled with these): {', '.join(exploitation_words)}
+Include some questions that naturally use these words.
+"""
+
     prompt = f"""Based on the following story, create {num_questions} quiz questions for a {user_age}-year-old child at a {reading_level} reading level.
 
 Story:
-{story_content}
+{story_content}{exploration_note}{focus_words_note}
 
 Create a mix of these question types:
 1. Reading comprehension ("reading" type) - multiple choice: what happened in the story
@@ -255,6 +364,82 @@ def determine_reading_level(assessment_score: float, age: int) -> str:
             return "intermediate"
         else:
             return "beginner"
+
+
+def analyze_pronunciation_difficulties(word_confidences: List[Dict], story_context: str = "") -> List[str]:
+    """
+    Use AI to intelligently determine which words are genuinely difficult to pronounce.
+    Filters out filler words, connectors, and false positives.
+    
+    Args:
+        word_confidences: List of dicts with 'word' and 'confidence' (0-1 scale)
+        story_context: Optional story text for context
+    
+    Returns:
+        List of words that are genuinely difficult and need practice
+    """
+    if not word_confidences:
+        return []
+    
+    # Build word list with confidence scores
+    word_data = "\n".join([
+        f"- {item['word']}: {item['confidence']:.2f} confidence"
+        for item in word_confidences
+    ])
+    
+    prompt = f"""You are analyzing pronunciation data from a child reading aloud. 
+Your task is to identify which words are GENUINELY difficult for the child to pronounce.
+
+Word Confidence Scores (0.0 = poor pronunciation, 1.0 = perfect):
+{word_data}
+
+IMPORTANT FILTERING RULES:
+1. EXCLUDE common filler words: um, uh, like, well, so, just, really, actually, basically, literally
+2. EXCLUDE connector words: and, but, or, the, a, an, in, on, at, to, for, of, with
+3. EXCLUDE words with confidence > 0.75 (they're probably fine)
+4. INCLUDE content words (nouns, verbs, adjectives) with confidence < 0.6
+5. INCLUDE words that are genuinely difficult to pronounce for children
+6. Consider the context - some short words might be genuinely difficult
+
+Return ONLY a JSON array of words that genuinely need practice, like:
+["difficult", "wonderful", "magnificent"]
+
+If NO words are genuinely difficult, return an empty array: []
+
+Your response (JSON array only):"""
+
+    try:
+        client = _get_gemini_client()
+        response = client.models.generate_content(
+            model=GEMINI_MODEL,
+            contents=prompt
+        )
+        
+        content = (response.text or "").strip()
+        
+        # Parse JSON response
+        import json
+        import re
+        
+        # Extract JSON array from response
+        json_match = re.search(r'\[.*\]', content, re.DOTALL)
+        if json_match:
+            difficult_words = json.loads(json_match.group(0))
+            # Ensure all items are strings and lowercase
+            return [str(w).lower().strip() for w in difficult_words if w]
+        
+        return []
+        
+    except Exception as e:
+        print(f"Error analyzing pronunciation difficulties: {e}")
+        # Fallback: simple threshold-based filtering
+        return [
+            item['word'].lower()
+            for item in word_confidences
+            if item['confidence'] < 0.5 and 
+               item['word'].lower() not in ['um', 'uh', 'like', 'and', 'but', 'the', 'a', 'an', 'or']
+        ]
+
 
 def analyze_word_familiarity(words: List[str], user_responses: List[Dict]) -> Dict[str, float]:
     """Analyze which words the user is familiar with based on their responses"""
