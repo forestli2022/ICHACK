@@ -3,7 +3,6 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import Login from './components/Login';
 import ProfileSetup from './components/ProfileSetup';
 import Home from './components/Home';
-import Assessment from './components/Assessment';
 import ReadingSession from './components/ReadingSession';
 import Report from './components/Report';
 
@@ -88,16 +87,6 @@ function App() {
             element={
               userId && profileComplete ? (
                 <Home userId={userId} />
-              ) : <Navigate to="/" />
-            } 
-          />
-
-          {/* Assessment Route */}
-          <Route 
-            path="/assessment" 
-            element={
-              userId && profileComplete ? (
-                <Assessment userId={userId} />
               ) : <Navigate to="/" />
             } 
           />

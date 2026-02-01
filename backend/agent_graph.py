@@ -211,26 +211,29 @@ def build_agent_graph(db: Session):
     graph = StateGraph(AgentState)
 
     graph.add_node("generate_story", lambda state: _generate_story_node(db, state))
-    graph.add_node("evaluate_story", lambda state: _evaluate_story_node(db, state))
+    # DISABLED: Story quality evaluation filter for now
+    # graph.add_node("evaluate_story", lambda state: _evaluate_story_node(db, state))
     graph.add_node("persist_story", lambda state: _persist_story_node(db, state))
     graph.add_node("generate_quizzes", lambda state: _generate_quizzes_node(db, state))
 
     graph.set_entry_point("generate_story")
-    graph.add_edge("generate_story", "evaluate_story")
+    # Skip evaluation, go straight to persistence
+    graph.add_edge("generate_story", "persist_story")
 
-    def _route_after_evaluation(state: AgentState) -> str:
-        if not state.get("quality_passed", False) and state.get("attempts", 0) < state.get("max_attempts", 2):
-            return "regenerate"
-        return "accept"
-
-    graph.add_conditional_edges(
-        "evaluate_story",
-        _route_after_evaluation,
-        {
-            "regenerate": "generate_story",
-            "accept": "persist_story"
-        }
-    )
+    # DISABLED: Conditional routing based on quality evaluation
+    # def _route_after_evaluation(state: AgentState) -> str:
+    #     if not state.get("quality_passed", False) and state.get("attempts", 0) < state.get("max_attempts", 2):
+    #         return "regenerate"
+    #     return "accept"
+    #
+    # graph.add_conditional_edges(
+    #     "evaluate_story",
+    #     _route_after_evaluation,
+    #     {
+    #         "regenerate": "generate_story",
+    #         "accept": "persist_story"
+    #     }
+    # )
 
     graph.add_edge("persist_story", "generate_quizzes")
     graph.add_edge("generate_quizzes", END)

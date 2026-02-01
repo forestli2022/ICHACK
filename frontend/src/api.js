@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_BASE_URL = 'http://localhost:8001/api';
+const API_BASE_URL = 'http://localhost:8000/api';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -26,9 +26,6 @@ export const authAPI = {
   updateProfileStep: (userId, step, answer) => 
     api.post(`/auth/profile/setup/${userId}?step=${step}`, { value: answer }),
   completeProfile: (userId) => api.post(`/auth/profile/complete/${userId}`),
-  getAssessmentQuestions: () => api.get('/auth/assessment/questions'),
-  submitAssessment: (userId, answers) => 
-    api.post('/auth/assessment/submit', answers, { params: { user_id: userId } }),
   getUser: (userId) => api.get(`/auth/users/${userId}`),
 };
 
@@ -54,6 +51,28 @@ export const quizAPI = {
 export const reportAPI = {
   getUserReport: (userId) => api.get(`/reports/${userId}`),
   getWordProgress: (userId) => api.get(`/reports/words/${userId}`),
+};
+
+export const agentAPI = {
+  runAgent: async (userId, difficulty = null) => {
+    console.log('=== AGENT API CALL ===');
+    console.log('User ID:', userId);
+    console.log('Difficulty:', difficulty);
+    console.log('Request URL:', `${API_BASE_URL}/agent/run`);
+    console.log('Request Body:', { user_id: userId, difficulty });
+    try {
+      const response = await api.post('/agent/run', { user_id: userId, difficulty });
+      console.log('Agent Response Success:', response.data);
+      return response;
+    } catch (error) {
+      console.error('=== AGENT API ERROR ===');
+      console.error('Error Status:', error.response?.status);
+      console.error('Error Data:', error.response?.data);
+      console.error('Error Message:', error.message);
+      console.error('Full Error:', error);
+      throw error;
+    }
+  },
 };
 
 export default api;

@@ -6,7 +6,7 @@ from datetime import datetime
 from database import get_db
 from models import User, ReadingSession, Quiz, QuizResponse, WordKnowledge
 from schemas import QuizQuestion, QuizAnswer, QuizResult, QuizBatch, QuizSessionResult, QuizTypeAccuracy
-from ai_service import generate_quizzes
+from ai_service import generate_quizzes, validate_open_ended_answer
 
 router = APIRouter()
 
@@ -81,8 +81,46 @@ def submit_quiz_answer(
     if not quiz:
         raise HTTPException(status_code=404, detail="Quiz not found")
     
-    # Check if answer is correct
-    is_correct = answer.user_answer.strip().lower() == quiz.correct_answer.strip().lower()
+    # Check if answer is correct based on question type
+    if quiz.question_type == "reading":  # Multiple choice
+        is_correct = answer.user_answer.strip().lower() == quiz.correct_answer.strip().lower()
+        explanation = f"The correct answer is '{quiz.correct_answer}'"
+    elif quiz.question_type == "pronunciation":  # Pronunciation: user_answer is JSON string of missed words
+        import json
+        try:
+            missed_words = json.loads(answer.user_answer) if answer.user_answer else []
+            is_correct = len(missed_words) == 0
+            
+            # Record pronunciation difficulties
+            from models import WordDifficulty
+            for word in missed_words:
+                difficulty_record = WordDifficulty(
+                    user_id=session.user_id,
+                    word=word,
+                    difficulty_type="pronunciation",
+                    session_id=session_id,
+                    description=f"Missed during read-aloud exercise"
+                )
+                db.add(difficulty_record)
+            
+            if is_correct:
+                explanation = "Great job! You read the passage perfectly."
+            else:
+                explanation = f"Good effort! Practice these words: {', '.join(missed_words)}"
+        except:
+            is_correct = False
+            explanation = "Pronunciation check failed"
+    elif quiz.question_type in ["fill_blank", "general"]:  # Open-ended: use Gemini validation
+        validation_result = validate_open_ended_answer(
+            story_content=session.story_content,
+            question_text=quiz.question_text,
+            user_answer=answer.user_answer
+        )
+        is_correct = validation_result.get("is_valid", False)
+        explanation = validation_result.get("reasoning", "Validation complete")
+    else:
+        is_correct = answer.user_answer.strip().lower() == quiz.correct_answer.strip().lower()
+        explanation = f"The correct answer is '{quiz.correct_answer}'"
     
     # Store response
     response = QuizResponse(
@@ -126,7 +164,7 @@ def submit_quiz_answer(
     return QuizResult(
         is_correct=is_correct,
         correct_answer=quiz.correct_answer,
-        explanation=f"The correct answer is '{quiz.correct_answer}'"
+        explanation=explanation
     )
 
 @router.post("/{session_id}/complete")

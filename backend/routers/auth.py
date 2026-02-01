@@ -4,13 +4,11 @@ from typing import List, Optional
 from pydantic import BaseModel
 
 from database import get_db
-from models import User, InitialAssessment
+from models import User
 from schemas import (
-    UserCreate, UserResponse, AssessmentQuestion, AssessmentAnswer, 
-    AssessmentResult, UserLogin, UserSignUp, TokenResponse
+    UserCreate, UserResponse, UserLogin, UserSignUp, TokenResponse
 )
 from security import hash_password, verify_password, create_access_token, decode_access_token
-from ai_service import determine_reading_level
 
 router = APIRouter()
 
@@ -19,40 +17,6 @@ class ProfileQuestion(BaseModel):
     question_text: str
     question_type: str  # "text", "number", "select_multiple"
     options: Optional[List[str]] = None
-
-# Hardcoded initial assessment questions
-INITIAL_QUESTIONS = [
-    {
-        "question_number": 1,
-        "question_text": "What is your favorite thing to read about?",
-        "options": ["Animals", "Adventures", "Science", "Sports", "Fantasy"],
-        "correct_answer": "none"  # No correct answer, just preference
-    },
-    {
-        "question_number": 2,
-        "question_text": "Read this word: CAT. What does it mean?",
-        "options": ["A pet animal", "A vehicle", "A food", "A color"],
-        "correct_answer": "A pet animal"
-    },
-    {
-        "question_number": 3,
-        "question_text": "Complete the sentence: The dog ____ in the park.",
-        "options": ["runs", "run", "running", "ran"],
-        "correct_answer": "runs"
-    },
-    {
-        "question_number": 4,
-        "question_text": "What is the opposite of 'big'?",
-        "options": ["small", "large", "huge", "tall"],
-        "correct_answer": "small"
-    },
-    {
-        "question_number": 5,
-        "question_text": "Read: 'The sun is bright.' What is bright?",
-        "options": ["The sun", "The moon", "The star", "The cloud"],
-        "correct_answer": "The sun"
-    }
-]
 
 # ==================== LOGIN/SIGNUP ====================
 
@@ -172,7 +136,7 @@ def update_profile_step(
 
 @router.post("/profile/complete/{user_id}")
 def complete_profile(user_id: int, db: Session = Depends(get_db)):
-    """Mark profile setup as complete"""
+    """Mark profile setup as complete and set default reading level"""
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -180,68 +144,17 @@ def complete_profile(user_id: int, db: Session = Depends(get_db)):
     if not user.name or user.age == 0 or not user.interests:
         raise HTTPException(status_code=400, detail="Please complete all profile fields")
     
-    return {"status": "profile_complete"}
-
-# ==================== EXISTING ENDPOINTS ====================
-
-@router.get("/assessment/questions", response_model=List[AssessmentQuestion])
-def get_assessment_questions():
-    """Get initial assessment questions"""
-    return INITIAL_QUESTIONS
-
-@router.post("/assessment/submit", response_model=AssessmentResult)
-def submit_assessment(
-    user_id: int,
-    answers: List[AssessmentAnswer],
-    db: Session = Depends(get_db)
-):
-    """Submit assessment answers and determine reading level"""
-    user = db.query(User).filter(User.id == user_id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+    # Set default reading level based on age if not already set
+    if not user.reading_level:
+        if user.age < 6:
+            user.reading_level = "beginner"
+        elif user.age < 9:
+            user.reading_level = "intermediate"
+        else:
+            user.reading_level = "advanced"
+        db.commit()
     
-    # Calculate score
-    correct_count = 0
-    for answer in answers:
-        question = INITIAL_QUESTIONS[answer.question_number - 1]
-        is_correct = answer.user_answer == question["correct_answer"]
-        
-        # Store assessment response
-        assessment = InitialAssessment(
-            user_id=user_id,
-            question_number=answer.question_number,
-            question_text=question["question_text"],
-            user_answer=answer.user_answer,
-            is_correct=is_correct
-        )
-        db.add(assessment)
-        
-        if is_correct and question["correct_answer"] != "none":
-            correct_count += 1
-    
-    # Determine reading level based on score
-    total_graded = len([q for q in INITIAL_QUESTIONS if q["correct_answer"] != "none"])
-    score = correct_count / total_graded if total_graded > 0 else 0
-    
-    if score >= 0.8:
-        reading_level = "advanced"
-        recommendations = ["Complex stories", "Chapter books", "Vocabulary challenges"]
-    elif score >= 0.5:
-        reading_level = "intermediate"
-        recommendations = ["Short stories", "Simple paragraphs", "Basic comprehension"]
-    else:
-        reading_level = "beginner"
-        recommendations = ["Picture books", "Simple words", "Letter recognition"]
-    
-    # Update user's reading level
-    user.reading_level = reading_level
-    db.commit()
-    
-    return AssessmentResult(
-        reading_level=reading_level,
-        score=score,
-        recommendations=recommendations
-    )
+    return {"status": "profile_complete", "reading_level": user.reading_level}
 
 @router.get("/users/{user_id}", response_model=UserResponse)
 def get_user(user_id: int, db: Session = Depends(get_db)):

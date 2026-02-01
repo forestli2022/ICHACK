@@ -15,7 +15,7 @@ function Home({ userId }) {
       <div className="card">
         <h1>HOME</h1>
         <motion.button
-          onClick={() => navigate('/assessment')}
+          onClick={() => navigate('/reading', { state: { userId } })}
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
           className="btn-primary"

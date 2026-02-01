@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { storyAPI, quizAPI } from '../api';
+import { storyAPI, quizAPI, agentAPI } from '../api';
+import TextFollower from './TextFollower.tsx';
 
 function ReadingSession({ userId, sessionId, setSessionId }) {
   const navigate = useNavigate();
@@ -25,16 +26,33 @@ function ReadingSession({ userId, sessionId, setSessionId }) {
   }, []);
 
   const generateNewStory = async () => {
+    console.log('=== GENERATE NEW STORY ===');
+    console.log('User ID:', userId);
     setStage('loading');
     try {
-      const response = await storyAPI.generateStory(userId);
+      console.log('Calling agentAPI.runAgent...');
+      const response = await agentAPI.runAgent(userId);
+      console.log('Agent response received:', response.data);
       setSessionId(response.data.session_id);
-      setStory(response.data);
+      setStory({
+        session_id: response.data.session_id,
+        title: response.data.title,
+        content: response.data.content,
+        difficulty: response.data.difficulty
+      });
+      // Store quizzes from agent response
+      setQuizzes(response.data.questions || []);
       setSessionResults(null);
       setStage('story');
+      console.log('Story generation successful!');
     } catch (error) {
-      console.error('Error generating story:', error);
-      alert('Failed to generate story. Please try again.');
+      console.error('=== GENERATE STORY ERROR ===');
+      console.error('Error type:', error.constructor.name);
+      console.error('Error message:', error.message);
+      console.error('Error response status:', error.response?.status);
+      console.error('Error response data:', error.response?.data);
+      console.error('Full error object:', error);
+      alert(`Failed to generate story: ${error.response?.data?.detail || error.message}`);
     }
   };
 
@@ -53,16 +71,26 @@ function ReadingSession({ userId, sessionId, setSessionId }) {
   const startQuiz = async () => {
     setStage('loading');
     try {
-      const response = await quizAPI.generateQuizzes(sessionId || story.session_id);
-      setQuizzes(response.data.questions);
-      setCurrentQuizIndex(0);
-      setScore({ correct: 0, total: 0 });
-      setSessionResults(null);
-      setStage('quiz');
-      setStartTime(Date.now());
+      // Use quizzes from agent if already available
+      if (quizzes.length > 0) {
+        setCurrentQuizIndex(0);
+        setScore({ correct: 0, total: 0 });
+        setSessionResults(null);
+        setStage('quiz');
+        setStartTime(Date.now());
+      } else {
+        // Fallback to generating quizzes separately if not available
+        const response = await quizAPI.generateQuizzes(sessionId || story.session_id);
+        setQuizzes(response.data.questions);
+        setCurrentQuizIndex(0);
+        setScore({ correct: 0, total: 0 });
+        setSessionResults(null);
+        setStage('quiz');
+        setStartTime(Date.now());
+      }
     } catch (error) {
-      console.error('Error generating quizzes:', error);
-      alert('Failed to generate quizzes');
+      console.error('Error starting quizzes:', error);
+      alert('Failed to start quizzes');
       setStage('story');
     }
   };
@@ -187,6 +215,40 @@ function ReadingSession({ userId, sessionId, setSessionId }) {
   if (stage === 'quiz' || stage === 'feedback') {
     const currentQuiz = quizzes[currentQuizIndex];
     const progress = ((currentQuizIndex + 1) / quizzes.length) * 100;
+
+    // Special handling for pronunciation quiz type
+    if (currentQuiz.question_type === 'pronunciation' && stage === 'quiz') {
+      return (
+        <motion.div
+          className="card-container"
+          initial={{ opacity: 0, x: 100 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ duration: 0.3 }}
+        >
+          <div className="card-content" style={{ height: '600px', display: 'flex', flexDirection: 'column' }}>
+            <div className="progress-bar">
+              <div className="progress-fill" style={{ width: `${progress}%` }} />
+            </div>
+
+            <h2>Question {currentQuizIndex + 1} of {quizzes.length}</h2>
+            <h3 style={{ color: '#2ecc71', marginBottom: '20px' }}>📖 Read Aloud</h3>
+            
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+              <TextFollower 
+                text={story?.content || currentQuiz.correct_answer} 
+                onComplete={(missedWords) => {
+                  // Submit pronunciation result
+                  setSelectedAnswer(JSON.stringify(missedWords));
+                  setTimeout(() => {
+                    submitAnswer();
+                  }, 500);
+                }}
+              />
+            </div>
+          </div>
+        </motion.div>
+      );
+    }
 
     return (
       <motion.div

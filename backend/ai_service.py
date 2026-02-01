@@ -1,15 +1,20 @@
 import os
-import random
 from dotenv import load_dotenv
-from openai import OpenAI
 from typing import List, Dict, Optional
+
+from google import genai
 
 # Load environment variables from .env file
 load_dotenv()
 
-# Set OpenAI API key
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-client = OpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None
+# Set OpenAI/OpenRouter API config
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3-flash-preview")
+
+def _get_gemini_client():
+    if not GEMINI_API_KEY:
+        raise RuntimeError("GEMINI_API_KEY is not set")
+    return genai.Client(api_key=GEMINI_API_KEY)
 
 def generate_story(
     reading_level: str,
@@ -38,7 +43,6 @@ def generate_story(
     interests_str = ", ".join(interests) if interests else "animals and adventures"
     
     focus_words = focus_words or []
-    avoid_titles = avoid_titles or []
     focus_words_str = ", ".join(focus_words)
 
     focus_requirement = (
@@ -46,26 +50,18 @@ def generate_story(
         if focus_words
         else "- No required focus words"
     )
-
-    story_seed = random.choice([
-        "a rainy day mystery",
-        "a sunny park adventure",
-        "a trip to a tiny village",
-        "a surprise visit to a lighthouse",
-        "a picnic by a sparkling lake",
-        "a journey on a little boat",
-        "a friendly festival in town",
-        "a cozy night in a treehouse"
-    ])
-
-    avoid_line = ""
-    if avoid_titles:
-        avoid_line = f"Avoid stories or titles too similar to: {'; '.join(avoid_titles[:3])}"
-
-    style_hint_line = (
-        f"Extra guidance: {style_hint}"
+    
+    avoid_titles = avoid_titles or []
+    avoid_requirement = (
+        f"\n- Avoid these recent title themes: {', '.join(avoid_titles)}"
+        if avoid_titles
+        else ""
+    )
+    
+    style_hint_text = (
+        f"\n- Additional style requirements: {style_hint}"
         if style_hint
-        else "Extra guidance: keep the language varied and engaging"
+        else ""
     )
 
     prompt = f"""Write a children's story for a {age}-year-old child at a {reading_level} reading level.
@@ -74,13 +70,12 @@ Requirements:
 - Word count: {word_count} words
 - Topics the child likes: {interests_str}
 - Reading level: {reading_level}
-- {focus_requirement}
-- Use this story seed for variety: {story_seed}
-- {style_hint_line}
-{avoid_line}
+- {focus_requirement}{avoid_requirement}{style_hint_text}
 - Use simple, age-appropriate language
 - Include a clear beginning, middle, and end
 - Make it engaging and fun
+- Do NOT use markdown formatting (no **, __, *, _, #, etc.)
+- Write in plain text only
 
 Please provide:
 1. A catchy title (on the first line)
@@ -92,19 +87,16 @@ Story: [Your story here]
 """
 
     try:
-        if not client:
-            raise RuntimeError("OPENAI_API_KEY is not set")
-        response = client.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=[
-                {"role": "system", "content": "You are a creative children's story writer who creates age-appropriate, engaging stories."},
-                {"role": "user", "content": prompt}
-            ],
-            temperature=0.8,
-            max_tokens=1000
+        client = _get_gemini_client()
+        client = _get_gemini_client()
+        response = client.models.generate_content(
+            model=GEMINI_MODEL,
+            contents=prompt
         )
-        
-        content = response.choices[0].message.content
+
+        content = (response.text or "").strip()
+        if not content:
+            raise RuntimeError(f"Gemini response missing text: {response}")
         
         # Parse title and story
         lines = content.strip().split('\n')
@@ -150,48 +142,67 @@ def generate_quizzes(story_content: str, reading_level: str, user_age: int, rece
 Story:
 {story_content}
 
-Create a mix of:
-1. Reading comprehension questions (what happened in the story)
-2. General knowledge questions (simple questions related to story themes)
-3. Fill-in-the-blank questions (complete sentences from the story)
+Create a mix of these question types:
+1. Reading comprehension ("reading" type) - multiple choice: what happened in the story
+2. General knowledge ("general" type) - open-ended: simple questions related to story themes
+3. Fill-in-the-blank ("fill_blank" type) - open-ended: complete sentences from the story
+4. Pronunciation practice ("pronunciation" type) - special: read a portion of the story aloud
+
+IMPORTANT: 
+- ALWAYS include ONE "pronunciation" type question
+- Vary the other question types! Don't make them all the same type.
 
 For each question, provide:
-- type: "reading", "general", or "fill_blank"
+- type: "reading" (multiple choice), "general" (open-ended), "fill_blank" (open-ended), or "pronunciation" (read-aloud)
 - question: The question text
-- answer: The correct answer
-- options: (for reading and general questions) 4 multiple choice options including the correct answer
+- answer: The correct answer (key words/phrase for open-ended; full passage text for pronunciation)
+- options: ONLY for "reading" type. 4 multiple choice options including the correct answer. Omit for other types.
 
-Format your response as a JSON array. Example:
-[
-  {{
-    "type": "reading",
-    "question": "What did the character do?",
-    "answer": "flew in the sky",
-    "options": ["flew in the sky", "swam in the ocean", "ran on the ground", "slept all day"]
-  }},
-  {{
-    "type": "fill_blank",
-    "question": "The bird loved to ____.",
-    "answer": "fly",
-    "options": ["fly", "swim", "run", "sleep"]
-  }}
-]
-"""
+Format your response as a JSON array. Examples:
+
+Reading question (multiple choice):
+{{
+  "type": "reading",
+  "question": "What did the character do?",
+  "answer": "flew in the sky",
+  "options": ["flew in the sky", "swam in the ocean", "ran on the ground", "slept all day"]
+}}
+
+Fill-in-the-blank (open-ended, NO options):
+{{
+  "type": "fill_blank",
+  "question": "The bird loved to ____.",
+  "answer": "fly"
+}}
+
+General knowledge (open-ended, NO options):
+{{
+  "type": "general",
+  "question": "Why do you think the bird was happy?",
+  "answer": "because it had a friend"
+}}
+
+Pronunciation (read-aloud, NO options):
+{{
+  "type": "pronunciation",
+  "question": "Read this part of the story aloud clearly:",
+  "answer": "Once upon a time, there was a little bird. The bird loved to fly."
+}}
+
+REMEMBER: 
+- Always include ONE "pronunciation" question with a passage from the story
+- Only include "options" field for "reading" type questions."""
 
     try:
-        if not client:
-            raise RuntimeError("OPENAI_API_KEY is not set")
-        response = client.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=[
-                {"role": "system", "content": "You are an educational assessment creator for children. Create engaging, age-appropriate quiz questions. Always respond with valid JSON."},
-                {"role": "user", "content": prompt}
-            ],
-            temperature=0.7,
-            max_tokens=1500
+        client = _get_gemini_client()
+        response = client.models.generate_content(
+            model=GEMINI_MODEL,
+            contents=prompt
         )
-        
-        content = response.choices[0].message.content
+
+        content = (response.text or "").strip()
+        if not content:
+            raise RuntimeError(f"Gemini response missing text: {response}")
         
         # Try to parse JSON response
         import json
@@ -256,3 +267,59 @@ def analyze_word_familiarity(words: List[str], user_responses: List[Dict]) -> Di
         word_scores[word] = max(0.0, min(1.0, score))
     
     return word_scores
+
+def validate_open_ended_answer(story_content: str, question_text: str, user_answer: str) -> Dict:
+    """
+    Use Gemini to validate open-ended answers (fill_blank, general) against the story.
+    Returns whether the answer makes sense and a confidence score.
+    """
+    if not user_answer or not user_answer.strip():
+        return {"is_valid": False, "confidence": 0.0, "reasoning": "Answer is empty"}
+    
+    validation_prompt = f"""You are grading a child's reading comprehension answer.
+
+Story:
+{story_content}
+
+Question: {question_text}
+Student's Answer: {user_answer}
+
+Determine if the student's answer is reasonable/correct based on the story. Consider:
+1. Does it match the story content?
+2. Is it grammatically reasonable for the question type?
+3. Does it show understanding of the story?
+
+Respond ONLY with JSON in this exact format:
+{{
+  "is_valid": true/false,
+  "confidence": 0.0-1.0,
+  "reasoning": "brief explanation"
+}}
+
+Do NOT include markdown code blocks, just raw JSON."""
+
+    try:
+        client = _get_gemini_client()
+        response = client.models.generate_content(
+            model=GEMINI_MODEL,
+            contents=validation_prompt
+        )
+        
+        content = (response.text or "").strip()
+        if not content:
+            return {"is_valid": False, "confidence": 0.5, "reasoning": "Validation failed"}
+        
+        import json
+        # Remove markdown if present
+        if "```json" in content:
+            content = content.split("```json")[1].split("```")[0].strip()
+        elif "```" in content:
+            content = content.split("```")[1].split("```")[0].strip()
+        
+        result = json.loads(content)
+        return result
+    except Exception as e:
+        print(f"Error validating answer: {e}")
+        # Conservative default: mark as invalid on error
+        return {"is_valid": False, "confidence": 0.5, "reasoning": f"Validation error: {str(e)}"}
+
