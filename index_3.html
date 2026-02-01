@@ -90,6 +90,9 @@ function App() {
   useEffect(() => { localStorage.setItem("teacher_ai_key", apiKey); }, [apiKey]);
   useEffect(() => { document.documentElement.classList.toggle('dark', darkMode); }, [darkMode]);
 
+  // Add this new state near your other useState declarations
+  const [useNativeTTS, setUseNativeTTS] = useState(false)
+
   const rosterStats = useMemo(() => {
     const total = students.length;
     const urgent = students.filter(s => s.accuracy < 0.6).length;
@@ -209,15 +212,79 @@ function App() {
     return Object.entries(groups).sort((a, b) => b[1].length - a[1].length);
   }, [students]);
 
-  const speakText = async (text) => {
-  if (!elevenKey) return alert("Please add an ElevenLabs Key in the settings (⚙️ icon).");
-  setIsSpeaking(true);
-  
-  // Use a default voice ID that's available on free tier
-  const voiceId = "21m00Tcm4TlvDq8ikWAM"; // Rachel - available on free tier
+// Test ElevenLabs connection
+const testElevenLabs = async () => {
+  if (!elevenKey) return alert("Please add an ElevenLabs Key first");
   
   try {
-    const response = await fetch(`https://api.elevenlabs.io/v2/text-to-speech/${voiceId}`, {
+    const response = await fetch("https://api.elevenlabs.io/v1/voices", {
+      headers: { "xi-api-key": elevenKey.trim() }
+    });
+    
+    if (!response.ok) {
+      const error = await response.text();
+      alert(`ElevenLabs Test Failed: ${error}`);
+      return;
+    }
+    
+    const data = await response.json();
+    console.log("Available voices:", data.voices);
+    alert(`✅ Connection successful! You have ${data.voices.length} voices available.\n\nCheck the console (F12) to see voice IDs.`);
+  } catch (e) {
+    alert(`Connection Error: ${e.message}`);
+  }
+};
+
+// Native browser speech (fallback)
+const speakWithBrowser = (text) => {
+  if ('speechSynthesis' in window) {
+    window.speechSynthesis.cancel(); // Stop any ongoing speech
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.rate = 0.9;
+    utterance.pitch = 1;
+    utterance.volume = 1;
+    
+    utterance.onstart = () => setIsSpeaking(true);
+    utterance.onend = () => setIsSpeaking(false);
+    utterance.onerror = () => setIsSpeaking(false);
+    
+    window.speechSynthesis.speak(utterance);
+  } else {
+    alert("Text-to-speech not supported in this browser");
+  }
+};
+
+// ElevenLabs speech
+const speakWithElevenLabs = async (text) => {
+  if (!elevenKey) {
+    alert("Please add an ElevenLabs Key in settings (⚙️)");
+    return;
+  }
+  
+  setIsSpeaking(true);
+  
+  try {
+    // First, get available voices
+    const voicesResponse = await fetch("https://api.elevenlabs.io/v1/voices", {
+      headers: { "xi-api-key": elevenKey.trim() }
+    });
+    
+    if (!voicesResponse.ok) {
+      throw new Error(`API Key Error: ${voicesResponse.status}`);
+    }
+    
+    const voicesData = await voicesResponse.json();
+    
+    if (!voicesData.voices || voicesData.voices.length === 0) {
+      throw new Error("No voices available on your account");
+    }
+    
+    // Use the first available voice
+    const voiceId = voicesData.voices[0].voice_id;
+    console.log("Using voice:", voicesData.voices[0].name, voiceId);
+    
+    // Now synthesize speech
+    const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`, {
       method: 'POST',
       headers: {
         'Accept': 'audio/mpeg',
@@ -225,8 +292,8 @@ function App() {
         'xi-api-key': elevenKey.trim()
       },
       body: JSON.stringify({
-        text: text,
-        model_id: "eleven_multilingual_v2",
+        text: text.substring(0, 500), // Limit to 500 chars to avoid quota issues
+        model_id: "eleven_monolingual_v1",
         voice_settings: {
           stability: 0.5,
           similarity_boost: 0.75
@@ -236,39 +303,61 @@ function App() {
 
     if (!response.ok) {
       const errorText = await response.text();
-      let errorMsg = "Voice synthesis failed";
-      try {
-        const errorJson = JSON.parse(errorText);
-        errorMsg = errorJson.detail?.message || errorJson.detail || errorText;
-      } catch (e) {
-        errorMsg = errorText;
-      }
-      throw new Error(errorMsg);
+      throw new Error(`${response.status}: ${errorText}`);
     }
 
     const blob = await response.blob();
     const audioUrl = URL.createObjectURL(blob);
     const audio = new Audio(audioUrl);
-    audio.onended = () => setIsSpeaking(false);
-    audio.onerror = () => {
+    
+    audio.onended = () => {
       setIsSpeaking(false);
+      URL.revokeObjectURL(audioUrl);
+    };
+    
+    audio.onerror = (e) => {
+      setIsSpeaking(false);
+      console.error("Audio playback error:", e);
       alert("Audio playback failed");
     };
-    audio.play();
+    
+    await audio.play();
+    
   } catch (e) {
     console.error("ElevenLabs Error:", e);
-    alert(`ElevenLabs Error: ${e.message}\n\nTroubleshooting:\n• Verify your API key is correct\n• Check your account has available characters\n• Try getting a key from elevenlabs.io`);
     setIsSpeaking(false);
+    
+    // Offer fallback
+    if (confirm(`ElevenLabs Error: ${e.message}\n\nWould you like to use your browser's built-in voice instead?`)) {
+      speakWithBrowser(text);
+    }
   }
 };
 
-  const stopSpeaking = () => {
-    document.querySelectorAll('audio').forEach(audio => {
-      audio.pause();
-      audio.currentTime = 0;
-    });
-    setIsSpeaking(false);
-  };
+// Main speak function
+const speakText = (text) => {
+  if (useNativeTTS || !elevenKey) {
+    speakWithBrowser(text);
+  } else {
+    speakWithElevenLabs(text);
+  }
+};
+
+// Stop all speech
+const stopSpeaking = () => {
+  // Stop browser speech
+  if ('speechSynthesis' in window) {
+    window.speechSynthesis.cancel();
+  }
+  
+  // Stop all audio elements
+  document.querySelectorAll('audio').forEach(audio => {
+    audio.pause();
+    audio.currentTime = 0;
+  });
+  
+  setIsSpeaking(false);
+};
 
   if (step === 'auth') {
     return (
@@ -343,35 +432,62 @@ function App() {
           <button onClick={() => setStep('auth')} className="px-4 py-2 bg-red-50 dark:bg-red-900/20 text-red-600 font-black text-xs rounded-xl uppercase tracking-widest">Logout</button>
         </nav>
 
-        {/* Settings Panel */}
         {showSettings && (
-          <div className="no-print mb-8 bg-white dark:bg-gray-900 p-6 rounded-3xl border dark:border-gray-800 shadow-sm">
-            <h3 className="text-lg font-black mb-4">⚙️ Settings</h3>
-            <div className="space-y-4">
-              <div>
-                <label className="text-[10px] font-black uppercase text-gray-400 px-1 mb-2 block">OpenRouter API Key</label>
-                <input 
-                  type="password" 
-                  placeholder="sk-or-v1-..." 
-                  value={apiKey} 
-                  onChange={e => setApiKey(e.target.value)}
-                  className="w-full bg-gray-50 dark:bg-gray-800 p-3 rounded-xl border dark:border-gray-700 outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-              <div>
-                <label className="text-[10px] font-black uppercase text-gray-400 px-1 mb-2 block">ElevenLabs API Key (for Text-to-Speech)</label>
-                <input 
-                  type="password" 
-                  placeholder="Enter ElevenLabs key..." 
-                  value={elevenKey} 
-                  onChange={e => setElevenKey(e.target.value)}
-                  className="w-full bg-gray-50 dark:bg-gray-800 p-3 rounded-xl border dark:border-gray-700 outline-none focus:ring-2 focus:ring-blue-500"
-                />
-                <p className="text-xs text-gray-500 mt-2">Get your key from <a href="https://elevenlabs.io" target="_blank" className="text-blue-500 hover:underline">elevenlabs.io</a></p>
+  <div className="no-print mb-8 bg-white dark:bg-gray-900 p-6 rounded-3xl border dark:border-gray-800 shadow-sm">
+    <h3 className="text-lg font-black mb-4">⚙️ Settings</h3>
+    <div className="space-y-4">
+      <div>
+        <label className="text-[10px] font-black uppercase text-gray-400 px-1 mb-2 block">OpenRouter API Key</label>
+        <input 
+          type="password" 
+          placeholder="sk-or-v1-..." 
+          value={apiKey} 
+          onChange={e => setApiKey(e.target.value)}
+          className="w-full bg-gray-50 dark:bg-gray-800 p-3 rounded-xl border dark:border-gray-700 outline-none focus:ring-2 focus:ring-blue-500"
+        />
+      </div>
+      
+            <div>
+              <label className="text-[10px] font-black uppercase text-gray-400 px-1 mb-2 block">ElevenLabs API Key (Optional)</label>
+              <input 
+                type="password" 
+                placeholder="Enter ElevenLabs key..." 
+                value={elevenKey} 
+                onChange={e => setElevenKey(e.target.value)}
+                className="w-full bg-gray-50 dark:bg-gray-800 p-3 rounded-xl border dark:border-gray-700 outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <div className="flex gap-2 mt-2">
+                <button 
+                  onClick={testElevenLabs}
+                  className="px-3 py-1 bg-blue-100 dark:bg-blue-900/20 text-blue-600 rounded-lg text-xs font-bold hover:bg-blue-200"
+                >
+                  🧪 Test Connection
+                </button>
+                <a 
+                  href="https://elevenlabs.io/app/settings/api-keys" 
+                  target="_blank"
+                  className="px-3 py-1 bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 rounded-lg text-xs font-bold hover:bg-gray-200"
+                >
+                  🔑 Get API Key
+                </a>
               </div>
             </div>
+
+            <div className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-800 rounded-xl">
+              <input 
+                type="checkbox" 
+                id="nativeTTS"
+                checked={useNativeTTS}
+                onChange={e => setUseNativeTTS(e.target.checked)}
+                className="w-4 h-4 rounded border-gray-300"
+              />
+              <label htmlFor="nativeTTS" className="text-sm font-bold cursor-pointer">
+                Use Browser Voice (Free, No API Key Required)
+              </label>
+            </div>
           </div>
-        )}
+        </div>
+      )}
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
           <aside className="no-print lg:col-span-3">
