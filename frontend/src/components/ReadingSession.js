@@ -119,6 +119,16 @@ function ReadingSession({ userId, sessionId, setSessionId }) {
       }
 
       setStage('feedback');
+      // If this was the last question, auto-complete the session shortly
+      if (currentQuizIndex >= quizzes.length - 1) {
+        setTimeout(() => {
+          try {
+            completeSession();
+          } catch (e) {
+            console.error('Auto-complete failed:', e);
+          }
+        }, 800);
+      }
     } catch (error) {
       console.error('Error submitting answer:', error);
       alert('Failed to submit answer');
@@ -237,11 +247,8 @@ function ReadingSession({ userId, sessionId, setSessionId }) {
               <TextFollower 
                 text={story?.content || currentQuiz.correct_answer} 
                 onComplete={(missedWords) => {
-                  // Submit pronunciation result
-                  setSelectedAnswer(JSON.stringify(missedWords));
-                  setTimeout(() => {
-                    submitAnswer();
-                  }, 500);
+                  // After practice words, go straight to report/completion page
+                  completeSession();
                 }}
               />
             </div>

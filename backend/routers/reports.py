@@ -33,17 +33,21 @@ def get_user_report(user_id: int, db: Session = Depends(get_db)):
     # Get recent sessions with details
     recent_sessions = []
     for session in sessions[:5]:  # Last 5 sessions
-        session_responses = [r for r in total_responses if r.session_id == session.id]
+        # Query responses for this specific session
+        session_responses = db.query(QuizResponse).filter(
+            QuizResponse.session_id == session.id
+        ).all()
         session_correct = len([r for r in session_responses if r.is_correct])
+        session_total = len(session_responses)
         
         recent_sessions.append(SessionSummary(
             session_id=session.id,
             story_title=session.story_title,
             started_at=session.started_at,
             completed_at=session.completed_at,
-            total_questions=len(session_responses),
+            total_questions=session_total,
             correct_answers=session_correct,
-            accuracy=(session_correct / len(session_responses) * 100) if session_responses else 0
+            accuracy=(session_correct / session_total * 100) if session_total > 0 else 0
         ))
     
     # Get word mastery

@@ -162,6 +162,18 @@ const TextFollower: React.FC<TextFollowerProps> = ({ text = '', onComplete }) =>
   const [currentPracticeIndex, setCurrentPracticeIndex] = useState(0);
   const [practiceAttempts, setPracticeAttempts] = useState(0);
   const [practiceResult, setPracticeResult] = useState<'correct' | 'incorrect' | null>(null);
+  // Prevent UI from reverting to story while parent handles completion
+  const [awaitingCompletion, setAwaitingCompletion] = useState(false);
+
+  // Clear awaiting state after a short timeout if parent doesn't advance
+  useEffect(() => {
+    if (!awaitingCompletion) return;
+    const id = setTimeout(() => {
+      setAwaitingCompletion(false);
+      setStatusMsg('Submission timeout — you can continue.');
+    }, 6000);
+    return () => clearTimeout(id);
+  }, [awaitingCompletion]);
 
   // Auto-scroll to keep current word centered
   useEffect(() => {
@@ -234,9 +246,10 @@ const TextFollower: React.FC<TextFollowerProps> = ({ text = '', onComplete }) =>
             setPracticeAttempts(0);
             setStatusMsg('Great! Next word...');
           } else {
-            // All practice words done
+            // All practice words done — clear practice mode, signal parent and wait
             setPracticeMode(false);
-            setStatusMsg('Practice complete!');
+            setAwaitingCompletion(true);
+            setStatusMsg('Practice complete — submitting...');
             if (onComplete) {
               onComplete(practiceWords);
             }
@@ -344,8 +357,11 @@ const TextFollower: React.FC<TextFollowerProps> = ({ text = '', onComplete }) =>
           // Call AI agent to analyze and get likely pronounced words
           callAIForWordAnalysis(wordConfidenceList, uniqueMissedWords).then((aiResult) => {
             const finalMissedWords = aiResult || uniqueMissedWords;
+            // Sort by length descending and keep only the top 3
+            const sortedByLength = finalMissedWords.sort((a, b) => b.length - a.length);
+            const topThreeWords = sortedByLength.slice(0, 3);
             // Enter practice mode
-            setPracticeWords(finalMissedWords);
+            setPracticeWords(topThreeWords);
             setCurrentPracticeIndex(0);
             setPracticeAttempts(0);
             setPracticeMode(true);
@@ -353,8 +369,9 @@ const TextFollower: React.FC<TextFollowerProps> = ({ text = '', onComplete }) =>
           });
         } else {
           console.log('Perfect score! No missed words.');
-          setStatusMsg('Finished!');
-          // Call onComplete callback if provided
+          // No missed words — signal parent and wait so UI doesn't revert
+          setAwaitingCompletion(true);
+          setStatusMsg('Finished — submitting...');
           if (onComplete) {
             onComplete(uniqueMissedWords);
           }
@@ -396,9 +413,10 @@ const TextFollower: React.FC<TextFollowerProps> = ({ text = '', onComplete }) =>
             setPracticeAttempts(0);
             setStatusMsg('Let\'s try the next word...');
           } else {
-            // All practice words done
+            // All practice words done — clear practice mode, signal parent and wait
             setPracticeMode(false);
-            setStatusMsg('Practice complete!');
+            setAwaitingCompletion(true);
+            setStatusMsg('Practice complete — submitting...');
             if (onComplete) {
               onComplete(practiceWords);
             }
@@ -505,7 +523,13 @@ const TextFollower: React.FC<TextFollowerProps> = ({ text = '', onComplete }) =>
 
   return (
     <div style={styles.container}>
-      {!practiceMode ? (
+      {awaitingCompletion ? (
+        <>
+          <div style={{ ...styles.controls, justifyContent: 'center' }}>
+            <div style={styles.status}>{statusMsg}</div>
+          </div>
+        </>
+      ) : !practiceMode ? (
         <>
           <div style={styles.controls}>
             {!isFinished && (
