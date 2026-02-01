@@ -98,6 +98,7 @@ const splitWords = (text: string): WordState[] => {
 export type TextFollowerProps = {
   text: string;
   onComplete?: (missedWords: string[]) => void;
+  autoStart?: boolean;  // Auto-start listening without clicking button
 };
 
 // Call AI agent to analyze word confidence and get likely missed words
@@ -143,7 +144,7 @@ const speakWord = (word: string) => {
   }
 };
 
-const TextFollower: React.FC<TextFollowerProps> = ({ text = '', onComplete }) => {
+const TextFollower: React.FC<TextFollowerProps> = ({ text = '', onComplete, autoStart = false }) => {
   const [targetWords, setTargetWords] = useState<WordState[]>(() => splitWords(text));
 
   const foundIndex = targetWords.findIndex((w) => w.color === BLACK);
@@ -154,7 +155,7 @@ const TextFollower: React.FC<TextFollowerProps> = ({ text = '', onComplete }) =>
   const recognitionRef = useRef<any>(null);
   const [listening, setListening] = useState(false);
   const [supported, setSupported] = useState(true);
-  const [statusMsg, setStatusMsg] = useState('Click "Start Reading" to begin');
+  const [statusMsg, setStatusMsg] = useState(autoStart ? 'Starting...' : 'Click "Start Reading" to begin');
   const isListeningRef = useRef(false);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const wordRefs = useRef<(HTMLSpanElement | null)[]>([]);
@@ -216,6 +217,18 @@ const TextFollower: React.FC<TextFollowerProps> = ({ text = '', onComplete }) =>
       setTargetWords(splitWords(text));
     }
   }, [text, practiceMode]);
+  
+  // Debug: Log when practice index changes
+  useEffect(() => {
+    if (practiceMode) {
+      console.log(`📍 Practice index changed to: ${currentPracticeIndex}, word: ${lockedPracticeWordsRef.current[currentPracticeIndex]}`);
+    }
+  }, [currentPracticeIndex, practiceMode]);
+  
+  // Debug: Log when practiceProcessing changes
+  useEffect(() => {
+    console.log(`🔄 practiceProcessing changed to: ${practiceProcessing}`);
+  }, [practiceProcessing]);
 
   const handleResult = useCallback((event: any) => {
     const fullTranscript = Array.from(event.results)
@@ -428,6 +441,20 @@ const TextFollower: React.FC<TextFollowerProps> = ({ text = '', onComplete }) =>
       setStatusMsg('Listening...');
     };
 
+    // Auto-start if enabled
+    if (autoStart && !isListeningRef.current && !isFinished) {
+      setTimeout(() => {
+        try {
+          if (!isListeningRef.current) {
+            recognition.start();
+            setStatusMsg('Starting...');
+          }
+        } catch (err) {
+          console.log('Auto-start error:', err);
+        }
+      }, 1000);
+    }
+
     return () => {
       isListeningRef.current = false;
       if (recognitionRef.current) {
@@ -437,7 +464,7 @@ const TextFollower: React.FC<TextFollowerProps> = ({ text = '', onComplete }) =>
         recognitionRef.current = null;
       }
     };
-  }, [handleResult, handleError, handleEnd]);
+  }, [handleResult, handleError, handleEnd, autoStart, isFinished]);
 
   const startListening = () => {
     if (!recognitionRef.current || isFinished) return;
@@ -462,6 +489,47 @@ const TextFollower: React.FC<TextFollowerProps> = ({ text = '', onComplete }) =>
     }
   }, [statusMsg]);
 
+  const handlePracticeWordClick = useCallback(() => {
+    if (practiceProcessing) return; // Prevent double-clicks
+    
+    setPracticeProcessing(true);
+    const currentIdx = currentPracticeIndex;
+    const word = lockedPracticeWordsRef.current[currentIdx];
+    
+    console.log(`🔊 Playing word ${currentIdx + 1}: ${word}`);
+    speakWord(word);
+    
+    // Clear any existing timeout
+    if (practiceTimeoutRef.current) {
+      clearTimeout(practiceTimeoutRef.current);
+    }
+    
+    // Move to next word after short delay
+    practiceTimeoutRef.current = setTimeout(() => {
+      const nextIndex = currentPracticeIndex + 1;
+      console.log(`📍 Moving from word ${currentPracticeIndex + 1} to ${nextIndex + 1}`);
+      
+      if (nextIndex < lockedPracticeWordsRef.current.length) {
+        // Move to next word
+        console.log(`✅ Advancing to word ${nextIndex + 1}`);
+        setCurrentPracticeIndex(nextIndex);
+        setStatusMsg(`Word ${nextIndex + 1} of ${lockedPracticeWordsRef.current.length}`);
+        setPracticeProcessing(false);
+      } else {
+        // All practice words done
+        console.log('🎉 All practice words complete');
+        setPracticeMode(false);
+        setAwaitingCompletion(true);
+        setStatusMsg('Practice complete — submitting...');
+        setPracticeProcessing(false);
+        if (onComplete) {
+          onComplete(lockedPracticeWordsRef.current);
+        }
+      }
+      practiceTimeoutRef.current = null;
+    }, 2000); // 2 second delay to hear the word
+  }, [currentPracticeIndex, practiceProcessing, onComplete]);
+
   const startPractice = useCallback(() => {
     isListeningRef.current = true;
     setListening(true);
@@ -485,7 +553,7 @@ const TextFollower: React.FC<TextFollowerProps> = ({ text = '', onComplete }) =>
       ) : !practiceMode ? (
         <>
           <div style={styles.controls}>
-            {!isFinished && (
+            {!isFinished && !autoStart && (
               <button
                 onClick={startListening}
                 disabled={!supported || listening}
@@ -539,13 +607,30 @@ const TextFollower: React.FC<TextFollowerProps> = ({ text = '', onComplete }) =>
           </div>
 
           <div style={styles.practiceContainer}>
-            <h3 style={{ color: '#334155', marginBottom: '1rem' }}>Listen & Learn — Word {currentPracticeIndex + 1} of {practiceWords.length}</h3>
+            <div style={{ width: '100%', marginBottom: '1rem' }}>
+              <div style={{ color: '#64748b', fontSize: '0.875rem', fontWeight: '500', marginBottom: '0.5rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Word {currentPracticeIndex + 1} of {lockedPracticeWordsRef.current.length}</div>
+              <div style={{
+                height: '4px',
+                background: '#e2e8f0',
+                borderRadius: '2px',
+                overflow: 'hidden'
+              }}>
+                <div style={{
+                  height: '100%',
+                  background: 'linear-gradient(90deg, #3b82f6 0%, #06b6d4 100%)',
+                  width: `${((currentPracticeIndex + 1) / lockedPracticeWordsRef.current.length) * 100}%`,
+                  transition: 'width 0.3s ease'
+                }} />
+              </div>
+            </div>
+            
             <div style={{
               ...styles.practiceWord,
-              backgroundColor: practiceResult === 'correct' ? '#d1fae5' : practiceResult === 'incorrect' ? '#fee2e2' : '#f8fafc',
-              borderColor: practiceResult === 'correct' ? '#2ecc71' : practiceResult === 'incorrect' ? '#e63946' : '#cbd5e1',
+              backgroundColor: '#ffffff',
+              borderColor: '#e2e8f0',
+              boxShadow: '0 4px 6px rgba(0, 0, 0, 0.07), 0 1px 3px rgba(0, 0, 0, 0.06)',
             }}>
-              {practiceWords[currentPracticeIndex]}
+              {lockedPracticeWordsRef.current[currentPracticeIndex] || ''}
             </div>
             
             <div style={{
@@ -556,64 +641,29 @@ const TextFollower: React.FC<TextFollowerProps> = ({ text = '', onComplete }) =>
               flexWrap: 'wrap',
             }}>
               <button
-                onClick={() => {
-                  if (practiceProcessing) return; // Prevent double-clicks
-                  
-                  setPracticeProcessing(true);
-                  const currentIdx = currentPracticeIndex;
-                  const word = lockedPracticeWordsRef.current[currentIdx];
-                  
-                  console.log(`🔊 Playing word ${currentIdx + 1}: ${word}`);
-                  speakWord(word);
-                  
-                  // Clear any existing timeout
-                  if (practiceTimeoutRef.current) {
-                    clearTimeout(practiceTimeoutRef.current);
-                  }
-                  
-                  // Move to next word after short delay
-                  practiceTimeoutRef.current = setTimeout(() => {
-                    setCurrentPracticeIndex((prevIndex) => {
-                      const nextIndex = prevIndex + 1;
-                      console.log(`📍 Moving from word ${prevIndex + 1} to ${nextIndex + 1}`);
-                      
-                      if (nextIndex < lockedPracticeWordsRef.current.length) {
-                        setStatusMsg(`Word ${nextIndex + 1} of ${lockedPracticeWordsRef.current.length}`);
-                        setPracticeProcessing(false);
-                        return nextIndex;
-                      } else {
-                        // All practice words done
-                        console.log('✅ All practice words complete');
-                        setPracticeMode(false);
-                        setAwaitingCompletion(true);
-                        setStatusMsg('Practice complete — submitting...');
-                        if (onComplete) {
-                          onComplete(lockedPracticeWordsRef.current);
-                        }
-                        setPracticeProcessing(false);
-                        return prevIndex; // Keep at last index
-                      }
-                    });
-                    practiceTimeoutRef.current = null;
-                  }, 2000); // 2 second delay to hear the word
-                }}
+                onClick={handlePracticeWordClick}
                 disabled={practiceProcessing}
                 style={{
                   ...styles.btn,
-                  background: practiceProcessing ? '#94a3b8' : '#3b82f6',
-                  cursor: practiceProcessing ? 'not-allowed' : 'pointer',
+                  background: practiceProcessing ? 'linear-gradient(135deg, #cbd5e1 0%, #94a3b8 100%)' : 'linear-gradient(135deg, #3b82f6 0%, #06b6d4 100%)',
+                  color: '#ffffff',
                   flex: '0 1 auto',
-                  minWidth: '200px',
-                  fontSize: '18px',
-                  padding: '12px 24px',
+                  minWidth: '220px',
+                  fontSize: '16px',
+                  padding: '14px 28px',
+                  cursor: practiceProcessing ? 'not-allowed' : 'pointer',
+                  fontWeight: '600',
+                  border: 'none',
+                  boxShadow: practiceProcessing ? '0 2px 4px rgba(0,0,0,0.1)' : '0 4px 12px rgba(59, 130, 246, 0.3)',
+                  transition: 'all 0.2s ease'
                 }}
               >
-                {practiceProcessing ? '⏳ Playing...' : '🔊 Hear Word & Continue'}
+                {practiceProcessing ? 'Playing...' : 'Play & Continue'}
               </button>
             </div>
             
-            <div style={{ color: '#64748b', fontSize: '14px', marginTop: '1.5rem', textAlign: 'center' }}>
-              🎯 Listen to how the word is pronounced
+            <div style={{ color: '#94a3b8', fontSize: '14px', marginTop: '1.5rem', textAlign: 'center', fontStyle: 'italic' }}>
+              Listen to the correct pronunciation
             </div>
           </div>
         </>
@@ -700,12 +750,12 @@ const styles: Record<string, React.CSSProperties> = {
     gap: '1.5rem',
   },
   practiceWord: {
-    fontSize: '3rem',
-    fontWeight: '600',
-    padding: '2rem 3rem',
-    borderRadius: '16px',
-    border: '3px solid',
-    marginBottom: '2rem',
+    fontSize: '3.5rem',
+    fontWeight: '700',
+    padding: '2.5rem 3rem',
+    borderRadius: '12px',
+    border: '2px solid',
+    marginBottom: '1.5rem',
     transition: 'all 0.3s ease',
   },
 };
