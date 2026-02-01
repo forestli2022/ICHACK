@@ -98,7 +98,6 @@ const splitWords = (text: string): WordState[] => {
 export type TextFollowerProps = {
   text: string;
   onComplete?: (missedWords: string[]) => void;
-  autoStart?: boolean;  // Auto-start listening without clicking button
 };
 
 // Call AI agent to analyze word confidence and get likely missed words
@@ -144,7 +143,7 @@ const speakWord = (word: string) => {
   }
 };
 
-const TextFollower: React.FC<TextFollowerProps> = ({ text = '', onComplete, autoStart = false }) => {
+const TextFollower: React.FC<TextFollowerProps> = ({ text = '', onComplete }) => {
   const [targetWords, setTargetWords] = useState<WordState[]>(() => splitWords(text));
 
   const foundIndex = targetWords.findIndex((w) => w.color === BLACK);
@@ -155,7 +154,7 @@ const TextFollower: React.FC<TextFollowerProps> = ({ text = '', onComplete, auto
   const recognitionRef = useRef<any>(null);
   const [listening, setListening] = useState(false);
   const [supported, setSupported] = useState(true);
-  const [statusMsg, setStatusMsg] = useState(autoStart ? 'Starting...' : 'Click "Start Reading" to begin');
+  const [statusMsg, setStatusMsg] = useState('Click "Start Reading" to begin');
   const isListeningRef = useRef(false);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const wordRefs = useRef<(HTMLSpanElement | null)[]>([]);
@@ -427,20 +426,6 @@ const TextFollower: React.FC<TextFollowerProps> = ({ text = '', onComplete, auto
       setStatusMsg('Listening...');
     };
 
-    // Auto-start if enabled
-    if (autoStart && !isListeningRef.current && !isFinished) {
-      setTimeout(() => {
-        try {
-          if (!isListeningRef.current) {
-            recognition.start();
-            setStatusMsg('Starting...');
-          }
-        } catch (err) {
-          console.log('Auto-start error:', err);
-        }
-      }, 1000);
-    }
-
     return () => {
       isListeningRef.current = false;
       if (recognitionRef.current) {
@@ -450,7 +435,7 @@ const TextFollower: React.FC<TextFollowerProps> = ({ text = '', onComplete, auto
         recognitionRef.current = null;
       }
     };
-  }, [handleResult, handleError, handleEnd, autoStart, isFinished]);
+  }, [handleResult, handleError, handleEnd]);
 
   const startListening = () => {
     if (!recognitionRef.current || isFinished) return;
@@ -498,7 +483,7 @@ const TextFollower: React.FC<TextFollowerProps> = ({ text = '', onComplete, auto
       ) : !practiceMode ? (
         <>
           <div style={styles.controls}>
-            {!isFinished && !autoStart && (
+            {!isFinished && (
               <button
                 onClick={startListening}
                 disabled={!supported || listening}

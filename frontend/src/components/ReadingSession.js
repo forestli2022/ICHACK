@@ -355,7 +355,6 @@ function ReadingSession({ userId, sessionId, setSessionId }) {
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
               <TextFollower 
                 text={story?.content || currentQuiz.correct_answer}
-                autoStart={true}
                 onComplete={async (missedWords) => {
                   console.log('TextFollower completed with missed words:', missedWords);
                   
