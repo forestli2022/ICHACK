@@ -76,6 +76,11 @@ function ReadingSession({ userId, sessionId, setSessionId }) {
     try {
       // Use quizzes from agent if already available
       if (quizzes.length > 0) {
+        // Reorder: pronunciation first, then other questions
+        const pronunciationQuiz = quizzes.find(q => q.question_type === 'pronunciation');
+        const otherQuizzes = quizzes.filter(q => q.question_type !== 'pronunciation');
+        const reorderedQuizzes = pronunciationQuiz ? [pronunciationQuiz, ...otherQuizzes] : quizzes;
+        setQuizzes(reorderedQuizzes);
         setCurrentQuizIndex(0);
         setScore({ correct: 0, total: 0 });
         setSessionResults(null);
@@ -84,7 +89,12 @@ function ReadingSession({ userId, sessionId, setSessionId }) {
       } else {
         // Fallback to generating quizzes separately if not available
         const response = await quizAPI.generateQuizzes(sessionId || story.session_id);
-        setQuizzes(response.data.questions);
+        // Reorder: pronunciation first, then other questions
+        const allQuizzes = response.data.questions;
+        const pronunciationQuiz = allQuizzes.find(q => q.question_type === 'pronunciation');
+        const otherQuizzes = allQuizzes.filter(q => q.question_type !== 'pronunciation');
+        const reorderedQuizzes = pronunciationQuiz ? [pronunciationQuiz, ...otherQuizzes] : allQuizzes;
+        setQuizzes(reorderedQuizzes);
         setCurrentQuizIndex(0);
         setScore({ correct: 0, total: 0 });
         setSessionResults(null);
@@ -314,7 +324,7 @@ function ReadingSession({ userId, sessionId, setSessionId }) {
             {highlightWords(story.content, story.exploration_words, story.exploitation_words)}
           </div>
           <button className="button-primary" onClick={startQuiz}>
-            Start Quiz →
+            Start Reading →
           </button>
         </div>
       </motion.div>
@@ -339,12 +349,13 @@ function ReadingSession({ userId, sessionId, setSessionId }) {
               <div className="progress-fill" style={{ width: `${progress}%` }} />
             </div>
 
-            <h2>Question {currentQuizIndex + 1} of {quizzes.length}</h2>
-            <h3 style={{ color: '#2ecc71', marginBottom: '20px' }}>📖 Read Aloud</h3>
+            <h2>Step {currentQuizIndex + 1} of {quizzes.length}</h2>
+            <h3 style={{ color: '#2ecc71', marginBottom: '20px' }}>📖 Read the Story Aloud</h3>
             
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
               <TextFollower 
-                text={story?.content || currentQuiz.correct_answer} 
+                text={story?.content || currentQuiz.correct_answer}
+                autoStart={true}
                 onComplete={async (missedWords) => {
                   console.log('TextFollower completed with missed words:', missedWords);
                   
@@ -363,8 +374,17 @@ function ReadingSession({ userId, sessionId, setSessionId }) {
                     console.error('Error submitting pronunciation result:', error);
                   }
                   
-                  // Go to completion/report page
-                  completeSession();
+                  // Move to next question (comprehension questions)
+                  if (currentQuizIndex < quizzes.length - 1) {
+                    setCurrentQuizIndex(currentQuizIndex + 1);
+                    setSelectedAnswer('');
+                    setFeedback(null);
+                    setStage('quiz');
+                    setStartTime(Date.now());
+                  } else {
+                    // All questions complete
+                    completeSession();
+                  }
                 }}
               />
             </div>

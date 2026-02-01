@@ -98,6 +98,7 @@ const splitWords = (text: string): WordState[] => {
 export type TextFollowerProps = {
   text: string;
   onComplete?: (missedWords: string[]) => void;
+  autoStart?: boolean;  // Auto-start listening without clicking button
 };
 
 // Call AI agent to analyze word confidence and get likely missed words
@@ -143,7 +144,7 @@ const speakWord = (word: string) => {
   }
 };
 
-const TextFollower: React.FC<TextFollowerProps> = ({ text = '', onComplete }) => {
+const TextFollower: React.FC<TextFollowerProps> = ({ text = '', onComplete, autoStart = false }) => {
   const [targetWords, setTargetWords] = useState<WordState[]>(() => splitWords(text));
 
   const foundIndex = targetWords.findIndex((w) => w.color === BLACK);
@@ -154,7 +155,7 @@ const TextFollower: React.FC<TextFollowerProps> = ({ text = '', onComplete }) =>
   const recognitionRef = useRef<any>(null);
   const [listening, setListening] = useState(false);
   const [supported, setSupported] = useState(true);
-  const [statusMsg, setStatusMsg] = useState('Click "Start Reading" to begin');
+  const [statusMsg, setStatusMsg] = useState(autoStart ? 'Starting...' : 'Click "Start Reading" to begin');
   const isListeningRef = useRef(false);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const wordRefs = useRef<(HTMLSpanElement | null)[]>([]);
@@ -165,11 +166,13 @@ const TextFollower: React.FC<TextFollowerProps> = ({ text = '', onComplete }) =>
   const [currentPracticeIndex, setCurrentPracticeIndex] = useState(0);
   const [practiceAttempts, setPracticeAttempts] = useState(0);
   const [practiceResult, setPracticeResult] = useState<'correct' | 'incorrect' | null>(null);
+  const [practiceProcessing, setPracticeProcessing] = useState(false); // Prevent double-clicks
   // Prevent UI from reverting to story while parent handles completion
   const [awaitingCompletion, setAwaitingCompletion] = useState(false);
   
   // Lock words list during practice to prevent swapping
   const lockedPracticeWordsRef = useRef<string[]>([]);
+  const practiceTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Clear awaiting state after a short timeout if parent doesn't advance
   useEffect(() => {
@@ -180,6 +183,15 @@ const TextFollower: React.FC<TextFollowerProps> = ({ text = '', onComplete }) =>
     }, 6000);
     return () => clearTimeout(id);
   }, [awaitingCompletion]);
+  
+  // Cleanup practice timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (practiceTimeoutRef.current) {
+        clearTimeout(practiceTimeoutRef.current);
+      }
+    };
+  }, []);
 
   // Auto-scroll to keep current word centered
   useEffect(() => {
@@ -204,29 +216,6 @@ const TextFollower: React.FC<TextFollowerProps> = ({ text = '', onComplete }) =>
     setTargetWords(splitWords(text));
   }, [text]);
 
-  // Auto-speak when entering practice mode or moving to next word (memoized to prevent re-triggers)
-  const practiceWordsRef = useRef<string[]>([]);
-  
-  useEffect(() => {
-    if (practiceMode) {
-      // Use locked words to prevent stale data
-      practiceWordsRef.current = lockedPracticeWordsRef.current || practiceWords;
-    }
-  }, [practiceMode, practiceWords]);
-  
-  useEffect(() => {
-    if (practiceMode && currentPracticeIndex < practiceWordsRef.current.length && !listening) {
-      const word = practiceWordsRef.current[currentPracticeIndex];
-      if (word) {
-        const timer = setTimeout(() => {
-          console.log(`🔊 Speaking practice word: ${word}`);
-          speakWord(word);
-        }, 500);
-        return () => clearTimeout(timer);
-      }
-    }
-  }, [practiceMode, currentPracticeIndex, listening]);
-
   const handleResult = useCallback((event: any) => {
     const fullTranscript = Array.from(event.results)
       .map((r: any) => r[0].transcript)
@@ -238,45 +227,9 @@ const TextFollower: React.FC<TextFollowerProps> = ({ text = '', onComplete }) =>
       setLastHeard(spokenWords[spokenWords.length - 1]);
     }
 
-    // Practice mode handling
-    if (practiceMode && practiceWords.length > 0 && currentPracticeIndex < practiceWords.length) {
-      const targetWord = practiceWords[currentPracticeIndex];
-      const lastSpoken = spokenWords[spokenWords.length - 1];
-      
-      // Safety check for undefined values
-      if (!targetWord || !lastSpoken) {
-        return;
-      }
-      
-      const isMatch = isFuzzyMatch(normalize(targetWord), normalize(lastSpoken));
-      
-      if (isMatch) {
-        // Correct pronunciation
-        setPracticeResult('correct');
-        isListeningRef.current = false;
-        setListening(false);
-        if (recognitionRef.current) {
-          try { recognitionRef.current.stop(); } catch {}
-        }
-        
-        setTimeout(() => {
-          setPracticeResult(null);
-          if (currentPracticeIndex + 1 < lockedPracticeWordsRef.current.length) {
-            setCurrentPracticeIndex(currentPracticeIndex + 1);
-            setPracticeAttempts(0);
-            setStatusMsg('Great! Next word...');
-          } else {
-            // All practice words done — clear practice mode, signal parent and wait
-            setPracticeMode(false);
-            setAwaitingCompletion(true);
-            setStatusMsg('Practice complete — submitting...');
-            if (onComplete) {
-              onComplete(lockedPracticeWordsRef.current);
-            }
-          }
-        }, 1000);
-        return;
-      }
+    // Practice mode no longer uses speech recognition - skip this section
+    if (practiceMode) {
+      return; // Practice mode is now manual (just listen, no recognition)
     }
 
     setTargetWords((prevTargetWords) => {
@@ -427,50 +380,16 @@ const TextFollower: React.FC<TextFollowerProps> = ({ text = '', onComplete }) =>
   }, []);
 
   const handleEnd = useCallback(() => {
-    if (practiceMode && isListeningRef.current) {
-      // In practice mode, check attempts after mic stops
-      const newAttempts = practiceAttempts + 1;
-      setPracticeAttempts(newAttempts);
-      
-      if (newAttempts >= 3) {
-        // Max attempts reached, skip this word
-        setPracticeResult('incorrect');
-        isListeningRef.current = false;
-        setListening(false);
-        setStatusMsg(`Try: ${lockedPracticeWordsRef.current[currentPracticeIndex]}`);
-        
-        setTimeout(() => {
-          setPracticeResult(null);
-          if (currentPracticeIndex + 1 < lockedPracticeWordsRef.current.length) {
-            setCurrentPracticeIndex(currentPracticeIndex + 1);
-            setPracticeAttempts(0);
-            setStatusMsg('Let\'s try the next word...');
-          } else {
-            // All practice words done — clear practice mode, signal parent and wait
-            setPracticeMode(false);
-            setAwaitingCompletion(true);
-            setStatusMsg('Practice complete — submitting...');
-            if (onComplete) {
-              onComplete(lockedPracticeWordsRef.current);
-            }
-          }
-        }, 2000);
-      } else {
-        // Retry - keep isListeningRef true and restart
-        setStatusMsg(`Attempt ${newAttempts + 1}/3`);
-        setTimeout(() => {
-          try {
-            if (isListeningRef.current) {
-              recognitionRef.current.start();
-            }
-          } catch {}
-        }, 300);
-      }
-    } else if (recognitionRef.current && isListeningRef.current) {
-      // Auto-restart if it stopped unexpectedly (normal reading mode)
+    // Practice mode doesn't use speech recognition anymore
+    if (practiceMode) {
+      return;
+    }
+    
+    // Auto-restart if stopped unexpectedly (normal reading mode only)
+    if (recognitionRef.current && isListeningRef.current) {
       setTimeout(() => {
         try {
-          if (isListeningRef.current) {
+          if (isListeningRef.current && !practiceMode) {
             recognitionRef.current.start();
           }
         } catch {}
@@ -479,7 +398,7 @@ const TextFollower: React.FC<TextFollowerProps> = ({ text = '', onComplete }) =>
       setListening(false);
       isListeningRef.current = false;
     }
-  }, [practiceMode, practiceAttempts, practiceWords, currentPracticeIndex, onComplete]);
+  }, [practiceMode]);
 
   useEffect(() => {
     const SpeechRecognition =
@@ -508,6 +427,20 @@ const TextFollower: React.FC<TextFollowerProps> = ({ text = '', onComplete }) =>
       setStatusMsg('Listening...');
     };
 
+    // Auto-start if enabled
+    if (autoStart && !isListeningRef.current && !isFinished) {
+      setTimeout(() => {
+        try {
+          if (!isListeningRef.current) {
+            recognition.start();
+            setStatusMsg('Starting...');
+          }
+        } catch (err) {
+          console.log('Auto-start error:', err);
+        }
+      }, 1000);
+    }
+
     return () => {
       isListeningRef.current = false;
       if (recognitionRef.current) {
@@ -517,7 +450,7 @@ const TextFollower: React.FC<TextFollowerProps> = ({ text = '', onComplete }) =>
         recognitionRef.current = null;
       }
     };
-  }, [handleResult, handleError, handleEnd]);
+  }, [handleResult, handleError, handleEnd, autoStart, isFinished]);
 
   const startListening = () => {
     if (!recognitionRef.current || isFinished) return;
@@ -565,7 +498,7 @@ const TextFollower: React.FC<TextFollowerProps> = ({ text = '', onComplete }) =>
       ) : !practiceMode ? (
         <>
           <div style={styles.controls}>
-            {!isFinished && (
+            {!isFinished && !autoStart && (
               <button
                 onClick={startListening}
                 disabled={!supported || listening}
@@ -619,7 +552,7 @@ const TextFollower: React.FC<TextFollowerProps> = ({ text = '', onComplete }) =>
           </div>
 
           <div style={styles.practiceContainer}>
-            <h3 style={{ color: '#334155', marginBottom: '1rem' }}>Practice Word {currentPracticeIndex + 1} of {practiceWords.length}</h3>
+            <h3 style={{ color: '#334155', marginBottom: '1rem' }}>Listen & Learn — Word {currentPracticeIndex + 1} of {practiceWords.length}</h3>
             <div style={{
               ...styles.practiceWord,
               backgroundColor: practiceResult === 'correct' ? '#d1fae5' : practiceResult === 'incorrect' ? '#fee2e2' : '#f8fafc',
@@ -636,44 +569,64 @@ const TextFollower: React.FC<TextFollowerProps> = ({ text = '', onComplete }) =>
               flexWrap: 'wrap',
             }}>
               <button
-                onClick={() => speakWord(practiceWords[currentPracticeIndex])}
+                onClick={() => {
+                  if (practiceProcessing) return; // Prevent double-clicks
+                  
+                  setPracticeProcessing(true);
+                  const currentIdx = currentPracticeIndex;
+                  const word = lockedPracticeWordsRef.current[currentIdx];
+                  
+                  console.log(`🔊 Playing word ${currentIdx + 1}: ${word}`);
+                  speakWord(word);
+                  
+                  // Clear any existing timeout
+                  if (practiceTimeoutRef.current) {
+                    clearTimeout(practiceTimeoutRef.current);
+                  }
+                  
+                  // Move to next word after short delay
+                  practiceTimeoutRef.current = setTimeout(() => {
+                    setCurrentPracticeIndex((prevIndex) => {
+                      const nextIndex = prevIndex + 1;
+                      console.log(`📍 Moving from word ${prevIndex + 1} to ${nextIndex + 1}`);
+                      
+                      if (nextIndex < lockedPracticeWordsRef.current.length) {
+                        setStatusMsg(`Word ${nextIndex + 1} of ${lockedPracticeWordsRef.current.length}`);
+                        setPracticeProcessing(false);
+                        return nextIndex;
+                      } else {
+                        // All practice words done
+                        console.log('✅ All practice words complete');
+                        setPracticeMode(false);
+                        setAwaitingCompletion(true);
+                        setStatusMsg('Practice complete — submitting...');
+                        if (onComplete) {
+                          onComplete(lockedPracticeWordsRef.current);
+                        }
+                        setPracticeProcessing(false);
+                        return prevIndex; // Keep at last index
+                      }
+                    });
+                    practiceTimeoutRef.current = null;
+                  }, 2000); // 2 second delay to hear the word
+                }}
+                disabled={practiceProcessing}
                 style={{
                   ...styles.btn,
-                  background: '#3b82f6',
+                  background: practiceProcessing ? '#94a3b8' : '#3b82f6',
+                  cursor: practiceProcessing ? 'not-allowed' : 'pointer',
                   flex: '0 1 auto',
-                  minWidth: '150px',
+                  minWidth: '200px',
+                  fontSize: '18px',
+                  padding: '12px 24px',
                 }}
               >
-                🔊 Hear It
+                {practiceProcessing ? '⏳ Playing...' : '🔊 Hear Word & Continue'}
               </button>
-              
-              {!listening && practiceResult === null && (
-                <button
-                  onClick={startPractice}
-                  style={{
-                    ...styles.btn,
-                    flex: '0 1 auto',
-                    minWidth: '150px',
-                  }}
-                >
-                  {practiceAttempts === 0 ? 'Start Practice' : `Try Again (${practiceAttempts}/3)`}
-                </button>
-              )}
             </div>
             
-            {practiceResult === 'correct' && (
-              <div style={{ color: '#2ecc71', fontWeight: 'bold', marginTop: '1rem' }}>✓ Correct!</div>
-            )}
-            
-            {practiceResult === 'incorrect' && (
-              <div style={{ color: '#e63946', fontWeight: 'bold', marginTop: '1rem' }}>Let's move to the next word</div>
-            )}
-            
-            <div style={styles.footer}>
-              Last heard:{' '}
-              <span style={{ color: '#2ecc71', fontWeight: 'bold' }}>
-                {lastHeard || '...'}
-              </span>
+            <div style={{ color: '#64748b', fontSize: '14px', marginTop: '1.5rem', textAlign: 'center' }}>
+              🎯 Listen to how the word is pronounced
             </div>
           </div>
         </>
