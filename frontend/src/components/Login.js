@@ -72,7 +72,7 @@ function Login({ onLoginSuccess }) {
       transition={{ duration: 0.5 }}
     >
       <div className="card-content">
-        <h1>📚 Reading Academy</h1>
+        <h1>Lexia</h1>
         <p>Learn to read with fun stories and quizzes!</p>
 
         <form onSubmit={mode === 'login' ? handleLogin : handleSignup}>
