@@ -194,6 +194,19 @@ function App() {
     setSelectedStudents(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
   };
 
+  const clusters = useMemo(() => {
+  const groups = {};
+  students.forEach(s => {
+    s.commonMistakes.forEach(mistake => {
+      const key = mistake.toLowerCase();
+      if (!groups[key]) groups[key] = [];
+      groups[key].push({ id: s.id, name: s.name, accuracy: s.accuracy });
+    });
+  });
+  // Sort groups by size so the biggest "fire" is at the top
+  return Object.entries(groups).sort((a, b) => b[1].length - a[1].length);
+}, [students]);
+
   if (step === 'auth') {
     return (
       <div className="min-h-screen flex items-center justify-center bg-blue-50 dark:bg-gray-950 p-6">
@@ -305,6 +318,42 @@ function App() {
           </aside>
 
           <main className="lg:col-span-9 space-y-8">
+            <div className="mb-10">
+              <h3 className="text-[10px] font-black uppercase text-gray-400 mb-4 tracking-widest px-1">Suggested Intervention Groups</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                {clusters.slice(0, 6).map(([mistake, members]) => (
+                  <div key={mistake} className="bg-white dark:bg-gray-900 border-2 border-dashed border-gray-200 dark:border-gray-800 p-5 rounded-[2rem]">
+                    <div className="flex justify-between items-center mb-3">
+                      <span className="px-3 py-1 bg-red-50 dark:bg-red-900/20 text-red-600 text-[10px] font-black rounded-lg uppercase tracking-widest">
+                        Group: /{mistake}/
+                      </span>
+                      <span className="text-[10px] font-bold text-gray-400">{members.length} Students</span>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {members.map(m => (
+                        <button 
+                          key={m.id} 
+                          onClick={() => setSelectedId(m.id)}
+                          className="text-[11px] font-bold py-1 px-3 bg-gray-50 dark:bg-gray-800 rounded-full hover:bg-blue-500 hover:text-white transition-all"
+                        >
+                          {m.name.split(' ')[0]}
+                        </button>
+                      ))}
+                    </div>
+                    <button 
+                      onClick={() => {
+                        setSelectedStudents(members.map(m => m.id));
+                        callAI('group');
+                      }}
+                      className="w-full mt-4 py-2 border border-gray-100 dark:border-gray-800 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-gray-50 dark:hover:bg-gray-800"
+                    >
+                      Plan Group Lesson
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+
             <div className="bg-white dark:bg-gray-900 rounded-[2.5rem] p-8 md:p-12 border dark:border-gray-800 shadow-sm">
               <div className="flex flex-col md:flex-row justify-between items-start gap-6 mb-12">
                 <div>
