@@ -13,7 +13,7 @@ const GREEN = '#2ecc71';
 const RED = '#e63946';
 const BLACK = '#1e293b';
 const CURRENT_BG = '#e8eaed';
-const SEARCH_WINDOW = 3;
+const SEARCH_WINDOW = 1;
 
 // --- Levenshtein & Fuzzy Match ---
 const getLevenshteinDistance = (a: string, b: string): number => {
