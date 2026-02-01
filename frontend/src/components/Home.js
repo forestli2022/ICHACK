@@ -1,15 +1,70 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
+import { reportAPI, authAPI } from '../api';
 
 function Home({ userId }) {
   const navigate = useNavigate();
   const [stats, setStats] = useState({
-    wordsRead: 342,
-    sessionsCompleted: 12,
-    readingStreak: 5,
-    currentLevel: 'Intermediate'
+    wordsRead: 0,
+    sessionsCompleted: 0,
+    readingStreak: 0,
+    currentLevel: 'Loading...'
   });
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    loadStats();
+  }, [userId]);
+
+  const loadStats = async () => {
+    try {
+      const [reportRes, userRes] = await Promise.all([
+        reportAPI.getUserReport(userId),
+        authAPI.getUser(userId),
+      ]);
+
+      const report = reportRes.data;
+      const user = userRes.data;
+
+      setStats({
+        sessionsCompleted: report.total_sessions || 0,
+        wordsRead: report.total_questions_answered || 0,
+        readingStreak: calculateStreak(report.recent_sessions) || 0,
+        currentLevel: user.reading_level || 'Beginner'
+      });
+    } catch (error) {
+      console.error('Error loading stats:', error);
+      // Fall back to default stats on error
+      setStats({
+        wordsRead: 0,
+        sessionsCompleted: 0,
+        readingStreak: 0,
+        currentLevel: 'Beginner'
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const calculateStreak = (sessions) => {
+    if (!sessions || sessions.length === 0) return 0;
+    let streak = 0;
+    const today = new Date();
+
+    for (let i = 0; i < sessions.length; i++) {
+      const sessionDate = new Date(sessions[i].started_at);
+      const expectedDate = new Date(today);
+      expectedDate.setDate(today.getDate() - i);
+
+      if (sessionDate.toDateString() === expectedDate.toDateString()) {
+        streak++;
+      } else {
+        break;
+      }
+    }
+    return streak;
+  };
 
   const containerVariants = {
     hidden: { opacity: 0 },
@@ -49,7 +104,7 @@ function Home({ userId }) {
         <div className="stat-card">
           <div className="stat-icon">📖</div>
           <div className="stat-value">{stats.wordsRead}</div>
-          <div className="stat-label">Words Read</div>
+          <div className="stat-label">Questions Answered</div>
         </div>
         <div className="stat-card">
           <div className="stat-icon">✅</div>
